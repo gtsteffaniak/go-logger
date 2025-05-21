@@ -1,7 +1,7 @@
 # go-logger
 simple logger for my golang based applications
 
-import and use:
+## import and use:
 
 ```
 import (
@@ -18,4 +18,10 @@ func main() {
 	logger.Debug("This is a debug message with details: %s", "some detail")
 	logger.Api("API call successful", 200)
 }
+```
+## linting
+
+```
+go mod tidy
+go tool golangci-lint run
 ```

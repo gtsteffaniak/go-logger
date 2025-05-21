@@ -122,9 +122,9 @@ func Debug(format string, args ...interface{}) {
 		Log(levels.DEBUG, format, true, false, GRAY, args...)
 	} else {
 		if len(args) > 0 {
-			log.Println("[DEBUG] ", fmt.Sprintf(format, args...))
+			log.Println("[DEBUG]", fmt.Sprintf(format, args...))
 		} else {
-			log.Println("[DEBUG] ", format)
+			log.Println("[DEBUG]", format)
 		}
 	}
 }
@@ -134,9 +134,9 @@ func Info(format string, args ...interface{}) {
 		Log(levels.INFO, format, false, false, "", args...)
 	} else {
 		if len(args) > 0 {
-			log.Printf(format, args...)
+			log.Println("[DEBUG]", fmt.Sprintf(format, args...))
 		} else {
-			log.Println(format)
+			log.Println("[DEBUG]", format)
 		}
 	}
 }
@@ -146,9 +146,9 @@ func Warning(format string, args ...interface{}) {
 		Log(levels.WARNING, format, true, false, YELLOW, args...)
 	} else {
 		if len(args) > 0 {
-			log.Println("[WARN ] ", fmt.Sprintf(format, args...))
+			log.Println("[WARN ]", fmt.Sprintf(format, args...))
 		} else {
-			log.Println("[WARN ] ", format)
+			log.Println("[WARN ]", format)
 		}
 	}
 }
@@ -170,9 +170,9 @@ func Fatal(format string, args ...interface{}) {
 		Log(levels.FATAL, format, true, false, RED, args...)
 	} else {
 		if len(args) > 0 {
-			log.Fatal("[FATAL] ", fmt.Sprintf(format, args...))
+			log.Fatal("[FATAL]", fmt.Sprintf(format, args...))
 		} else {
-			log.Fatal("[FATAL] ", format)
+			log.Fatal("[FATAL]", format)
 		}
 	}
 }
