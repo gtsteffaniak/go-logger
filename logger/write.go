@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -61,8 +62,7 @@ var stringToLevel = map[string]LogLevel{
 }
 
 // Log prints a log message if its level is greater than or equal to the logger's levels
-// It now accepts args ...interface{} for Sprintf-like behavior
-func Log(level string, format string, prefix, api bool, color string, args ...interface{}) {
+func Log(level string, msg string, prefix, api bool, color string) {
 	LEVEL := stringToLevel[level]
 	for _, logger := range loggers {
 		if api {
@@ -74,14 +74,7 @@ func Log(level string, format string, prefix, api bool, color string, args ...in
 				continue
 			}
 		}
-
-		var writeOut string
-		if len(args) > 0 {
-			writeOut = fmt.Sprintf(format, args...)
-		} else {
-			writeOut = format
-		}
-
+		writeOut := msg
 		formattedTime := time.Now().Format("2006/01/02 15:04:05")
 		if logger.colors && color != "" {
 			formattedTime = formattedTime + color
@@ -96,7 +89,7 @@ func Log(level string, format string, prefix, api bool, color string, args ...in
 		}
 		err := logger.logger.Output(3, writeOut) // 3 skips this function for correct file:line
 		if err != nil {
-			log.Printf("failed to log message '%v' with error `%v`", format, err)
+			log.Printf("failed to log message '%v' with error `%v`", msg, err)
 		}
 		if level == levels.FATAL {
 			os.Exit(1)
@@ -104,75 +97,132 @@ func Log(level string, format string, prefix, api bool, color string, args ...in
 	}
 }
 
-func Api(msg string, statusCode int) {
-	// redirects are not warnings anymore
-	// content not modified is not a warning anymore
+// --- Sprintf-style logging functions ---
+
+func Debugf(format string, a ...interface{}) {
+	messageToSend := fmt.Sprintf(format, a...)
+	if len(loggers) > 0 {
+		Log(levels.DEBUG, messageToSend, true, false, GRAY)
+	} else {
+		log.Println("[DEBUG]", messageToSend)
+	}
+}
+
+func Infof(format string, a ...interface{}) {
+	messageToSend := fmt.Sprintf(format, a...)
+	if len(loggers) > 0 {
+		Log(levels.INFO, messageToSend, true, false, "")
+	} else {
+		log.Println("[INFO]", messageToSend)
+	}
+}
+
+func Warningf(format string, a ...interface{}) {
+	messageToSend := fmt.Sprintf(format, a...)
+	if len(loggers) > 0 {
+		Log(levels.WARNING, messageToSend, true, false, YELLOW)
+	} else {
+		log.Println("[WARN ]", messageToSend)
+	}
+}
+
+func Errorf(format string, a ...interface{}) {
+	messageToSend := fmt.Sprintf(format, a...)
+	if len(loggers) > 0 {
+		Log(levels.ERROR, messageToSend, true, false, RED)
+	} else {
+		log.Println("[ERROR]", messageToSend)
+	}
+}
+
+func Fatalf(format string, a ...interface{}) {
+	messageToSend := fmt.Sprintf(format, a...)
+	if len(loggers) > 0 {
+		Log(levels.FATAL, messageToSend, true, false, RED)
+	} else {
+		log.Println("[FATAL]", messageToSend)
+		os.Exit(1)
+	}
+}
+
+func Apif(statusCode int, format string, a ...interface{}) {
+	messageToSend := fmt.Sprintf(format, a...)
+	var levelStr, colorStr string
 	if statusCode > 304 && statusCode < 500 {
-		Log(levels.WARNING, msg, false, true, YELLOW)
+		levelStr, colorStr = levels.WARNING, YELLOW
 	} else if statusCode >= 500 {
-		Log(levels.ERROR, msg, false, true, RED)
+		levelStr, colorStr = levels.ERROR, RED
 	} else {
-		Log(levels.INFO, msg, false, true, GREEN)
+		levelStr, colorStr = levels.INFO, GREEN
+	}
+	Log(levelStr, messageToSend, false, true, colorStr)
+}
+
+// --- Sprint-style logging functions (space-separated arguments) ---
+
+func sprintArgs(a ...interface{}) string {
+	if len(a) == 0 {
+		return ""
+	}
+	// fmt.Sprintln always adds a newline, so we trim it.
+	return strings.TrimSuffix(fmt.Sprintln(a...), "\n")
+}
+
+func Debug(a ...interface{}) {
+	messageToSend := sprintArgs(a...)
+	if len(loggers) > 0 {
+		Log(levels.DEBUG, messageToSend, true, false, GRAY)
+	} else {
+		log.Println("[DEBUG]", messageToSend)
 	}
 }
 
-// Helper methods for specific log levels
-func Debug(format string, args ...interface{}) {
+func Info(a ...interface{}) {
+	messageToSend := sprintArgs(a...)
 	if len(loggers) > 0 {
-		Log(levels.DEBUG, format, true, false, GRAY, args...)
+		Log(levels.INFO, messageToSend, true, false, "")
 	} else {
-		if len(args) > 0 {
-			log.Println("[DEBUG]", fmt.Sprintf(format, args...))
-		} else {
-			log.Println("[DEBUG]", format)
-		}
+		log.Println("[INFO]", messageToSend)
 	}
 }
 
-func Info(format string, args ...interface{}) {
+func Warning(a ...interface{}) {
+	messageToSend := sprintArgs(a...)
 	if len(loggers) > 0 {
-		Log(levels.INFO, format, false, false, "", args...)
+		Log(levels.WARNING, messageToSend, true, false, YELLOW)
 	} else {
-		if len(args) > 0 {
-			log.Println("[DEBUG]", fmt.Sprintf(format, args...))
-		} else {
-			log.Println("[DEBUG]", format)
-		}
+		log.Println("[WARN ]", messageToSend)
 	}
 }
 
-func Warning(format string, args ...interface{}) {
+func Error(a ...interface{}) {
+	messageToSend := sprintArgs(a...)
 	if len(loggers) > 0 {
-		Log(levels.WARNING, format, true, false, YELLOW, args...)
+		Log(levels.ERROR, messageToSend, true, false, RED)
 	} else {
-		if len(args) > 0 {
-			log.Println("[WARN ]", fmt.Sprintf(format, args...))
-		} else {
-			log.Println("[WARN ]", format)
-		}
+		log.Println("[ERROR]", messageToSend)
 	}
 }
 
-func Error(format string, args ...interface{}) {
+func Fatal(a ...interface{}) {
+	messageToSend := sprintArgs(a...)
 	if len(loggers) > 0 {
-		Log(levels.ERROR, format, true, false, RED, args...)
+		Log(levels.FATAL, messageToSend, true, false, RED)
 	} else {
-		if len(args) > 0 {
-			log.Println("[ERROR]", fmt.Sprintf(format, args...))
-		} else {
-			log.Println("[ERROR]", format)
-		}
+		log.Println("[FATAL]", messageToSend)
+		os.Exit(1)
 	}
 }
 
-func Fatal(format string, args ...interface{}) {
-	if len(loggers) > 0 {
-		Log(levels.FATAL, format, true, false, RED, args...)
+func Api(statusCode int, a ...interface{}) {
+	messageToSend := sprintArgs(a...)
+	var levelStr, colorStr string
+	if statusCode > 304 && statusCode < 500 {
+		levelStr, colorStr = levels.WARNING, YELLOW
+	} else if statusCode >= 500 {
+		levelStr, colorStr = levels.ERROR, RED
 	} else {
-		if len(args) > 0 {
-			log.Fatal("[FATAL]", fmt.Sprintf(format, args...))
-		} else {
-			log.Fatal("[FATAL]", format)
-		}
+		levelStr, colorStr = levels.INFO, GREEN
 	}
+	Log(levelStr, messageToSend, false, true, colorStr)
 }
