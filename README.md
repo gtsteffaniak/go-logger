@@ -3,7 +3,7 @@ simple logger for my golang based applications
 
 ## import and use:
 
-see [main.go]("main.go") as an example.
+see [main.go](https://github.com/gtsteffaniak/go-logger/blob/main/main.go) as an example.
 
 ## linting
 
