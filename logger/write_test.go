@@ -13,7 +13,7 @@ import (
 // setupForPrimaryLoggerTest (no changes needed)
 func setupForPrimaryLoggerTest(t *testing.T, buf *bytes.Buffer, activeLevels []LogLevel, noColors bool) {
 	t.Helper()
-	savedLoggers := append([]*Logger(nil), loggers...)
+	savedLoggers := append([]*LoggerConfig(nil), loggers...)
 	savedStdOutLoggerExists := stdOutLoggerExists
 	t.Cleanup(func() {
 		loggers = savedLoggers
@@ -21,20 +21,26 @@ func setupForPrimaryLoggerTest(t *testing.T, buf *bytes.Buffer, activeLevels []L
 	})
 	loggers = nil
 	stdOutLoggerExists = false
+	config := LoggerConfig{
+		Stdout:    true,
+		Levels:    activeLevels,
+		ApiLevels: []LogLevel{},
+		Colors:    !noColors,
+	}
 	// Assuming NewLogger is defined in your logger package (e.g. setup.go)
 	// and Logger struct has fields like 'logger', 'apiLevels', 'disabledAPI', etc.
-	l, err := NewLogger("", activeLevels, []LogLevel{}, noColors)
+	l, err := AddLogger(config)
 	if err != nil {
 		t.Fatalf("Failed to create test logger: %v", err)
 	}
 	l.logger.SetOutput(buf)
-	loggers = []*Logger{l}
+	loggers = []*LoggerConfig{l}
 }
 
 // setupForFallbackTest (no changes needed)
 func setupForFallbackTest(t *testing.T, buf *bytes.Buffer) {
 	t.Helper()
-	savedLoggers := append([]*Logger(nil), loggers...)
+	savedLoggers := append([]*LoggerConfig(nil), loggers...)
 	savedStdOutLoggerExists := stdOutLoggerExists
 	currentGlobalLogOutput := log.Writer() // May need adjustment if global log output isn't os.Stderr
 	savedGlobalLogFlags := log.Flags()
@@ -333,13 +339,20 @@ func TestApi_PrimaryLogger(t *testing.T) {
 	// Create a logger instance specifically for API tests if apiLevels are distinct
 	loggers = nil // Clear global loggers
 	stdOutLoggerExists = false
+
 	// Ensure logger/setup.go's NewLogger can handle distinct apiLevels
-	l, err := NewLogger("", []LogLevel{INFO, WARNING, ERROR}, []LogLevel{INFO, WARNING, ERROR}, noColors) // Activate relevant levels for API
+	l, err := AddLogger(LoggerConfig{
+		Stdout:    true,
+		Colors:    !noColors,
+		ApiLevels: []LogLevel{INFO, WARNING, ERROR},
+		Levels:    []LogLevel{INFO, WARNING, ERROR},
+		Disabled:  false,
+	}) // Activate relevant levels for API
 	if err != nil {
 		t.Fatalf("Failed to create test logger for API: %v", err)
 	}
 	l.logger.SetOutput(&buf)
-	loggers = []*Logger{l}
+	loggers = []*LoggerConfig{l}
 	t.Cleanup(func() { loggers = nil })
 
 	t.Run("ApifInfo", func(t *testing.T) {

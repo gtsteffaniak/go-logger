@@ -27,7 +27,7 @@ const (
 )
 
 var (
-	loggers []*Logger
+	loggers []*LoggerConfig
 )
 
 type levelConsts struct {
@@ -66,34 +66,39 @@ func Log(level string, msg string, prefix, api bool, color string) {
 	LEVEL := stringToLevel[level]
 	for _, logger := range loggers {
 		if api {
-			if logger.disabledAPI || !slices.Contains(logger.apiLevels, LEVEL) {
+			if logger.DisabledAPI || !slices.Contains(logger.ApiLevels, LEVEL) {
 				continue
 			}
-		} else {
-			if logger.disabled || !slices.Contains(logger.levels, LEVEL) {
+		} else if level != levels.FATAL {
+			if logger.Disabled || !slices.Contains(logger.Levels, LEVEL) {
 				continue
 			}
 		}
 		writeOut := msg
-		formattedTime := time.Now().Format("2006/01/02 15:04:05")
-		if logger.colors && color != "" {
+		var formattedTime string
+		if logger.Utc {
+			formattedTime = time.Now().UTC().Format("2006/01/02 15:04:05")
+		} else {
+			formattedTime = time.Now().Local().Format("2006/01/02 15:04:05")
+		}
+		if logger.Colors && color != "" {
 			formattedTime = formattedTime + color
 		}
-		if prefix || logger.debugEnabled {
+		if prefix || logger.DebugEnabled {
 			logger.logger.SetPrefix(fmt.Sprintf("%s [%s] ", formattedTime, level))
 		} else {
 			logger.logger.SetPrefix(formattedTime + " ")
 		}
-		if logger.colors && color != "" {
+		if logger.Colors && color != "" {
 			writeOut = writeOut + "\033[0m"
 		}
 		err := logger.logger.Output(3, writeOut) // 3 skips this function for correct file:line
 		if err != nil {
 			log.Printf("failed to log message '%v' with error `%v`", msg, err)
 		}
-		if level == levels.FATAL {
-			os.Exit(1)
-		}
+	}
+	if level == levels.FATAL {
+		os.Exit(1)
 	}
 }
 
