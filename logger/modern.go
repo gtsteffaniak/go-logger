@@ -51,6 +51,7 @@ func NewLogger(config JsonConfig) (Logger, error) {
 				if a.Key == slog.SourceKey {
 					source := a.Value.Any().(*slog.Source)
 					source.File = stripProjectPath(source.File)
+					source.Function = stripFunctionPath(source.Function)
 				}
 				return a
 			},
@@ -100,6 +101,16 @@ func stripProjectPath(filePath string) string {
 		return filePath[idx+1:]
 	}
 	return filePath
+}
+
+// stripFunctionPath removes the package path from function names for cleaner output
+func stripFunctionPath(functionPath string) string {
+	// Remove package path and keep only the function name
+	// Example: "github.com/gtsteffaniak/go-logger/logger.(*modernLogger).slogStructuredLog" -> "slogStructuredLog"
+	if idx := strings.LastIndex(functionPath, "."); idx != -1 {
+		return functionPath[idx+1:]
+	}
+	return functionPath
 }
 
 // convertJsonConfigToLoggerConfig converts JsonConfig to LoggerConfig
