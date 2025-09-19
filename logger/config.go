@@ -4,12 +4,13 @@ import "log"
 
 // friendly config for yaml/json interfaces
 type JsonConfig struct {
-	Levels    string `json:"levels"`    // separated list of log levels to enable. (eg. "info|warning|error|debug")
-	ApiLevels string `json:"apiLevels"` // separated list of log levels to enable for the API. (eg. "info|warning|error")
-	Output    string `json:"output"`    // output location. (eg. "stdout" or "path/to/file.log")
-	NoColors  bool   `json:"noColors"`  // disable colors in the output
-	Json      bool   `json:"json"`      // output in json format, currently not supported
-	Utc       bool   `json:"utc"`       // use UTC time in the output instead of local time
+	Levels     string `json:"levels"`     // separated list of log levels to enable. (eg. "info|warning|error|debug")
+	ApiLevels  string `json:"apiLevels"`  // separated list of log levels to enable for the API. (eg. "info|warning|error")
+	Output     string `json:"output"`     // output location. (eg. "stdout" or "path/to/file.log")
+	NoColors   bool   `json:"noColors"`   // disable colors in the output
+	Json       bool   `json:"json"`       // output in json format (enables structured logging)
+	Structured bool   `json:"structured"` // enable structured logging (default: false)
+	Utc        bool   `json:"utc"`        // use UTC time in the output instead of local time
 }
 
 // go logger log config
@@ -23,6 +24,8 @@ type LoggerConfig struct {
 	Colors       bool
 	Utc          bool
 	FilePath     string
+	Structured   bool
+	Json         bool
 
 	// not exposed
 	logger *log.Logger
