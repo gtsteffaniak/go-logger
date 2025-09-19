@@ -36,6 +36,8 @@ func AddLogger(logger LoggerConfig) (*LoggerConfig, error) {
 
 // SetupLogger configures the logger with file and stdout options and their respective log levels
 func SetupLogger(config JsonConfig) error {
+	mu.Lock()
+	defer mu.Unlock()
 	upperLevels := []LogLevel{}
 	for _, level := range SplitByMultiple(config.Levels) {
 		if level == "" {
@@ -94,6 +96,9 @@ func SetupLogger(config JsonConfig) error {
 		// stdout logger already exists... don't create another
 		return fmt.Errorf("stdout logger already exists, could not set config levels=[%v] apiLevels=[%v] noColors=[%v]", levels, config.ApiLevels, config.NoColors)
 	}
+	// JSON always enables structured logging, otherwise use the structured config (default: false)
+	structuredOutput := config.Json || config.Structured
+
 	// Create the logger
 	logger, err := AddLogger(LoggerConfig{
 		Levels:       upperLevels,
@@ -105,6 +110,8 @@ func SetupLogger(config JsonConfig) error {
 		DisabledAPI:  slices.Contains(upperApiLevels, DISABLED),
 		Utc:          config.Utc,
 		FilePath:     config.Output,
+		Structured:   structuredOutput,
+		Json:         config.Json,
 	})
 	if err != nil {
 		return err

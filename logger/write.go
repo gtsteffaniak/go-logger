@@ -6,6 +6,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -14,10 +15,10 @@ type LogLevel int
 const (
 	DISABLED LogLevel = 0
 	ERROR    LogLevel = 1
-	FATAL    LogLevel = 1
-	WARNING  LogLevel = 2
-	INFO     LogLevel = 3
-	DEBUG    LogLevel = 4
+	FATAL    LogLevel = 2
+	WARNING  LogLevel = 3
+	INFO     LogLevel = 4
+	DEBUG    LogLevel = 5
 	API      LogLevel = 10
 	// COLORS
 	RED    = "\033[31m"
@@ -27,8 +28,15 @@ const (
 )
 
 var (
-	loggers []*LoggerConfig
+	loggers      []*LoggerConfig
+	mu           sync.RWMutex
+	globalLogger Logger
 )
+
+// SetGlobalLogger sets the global logger instance for legacy compatibility
+func SetGlobalLogger(logger Logger) {
+	globalLogger = logger
+}
 
 type levelConsts struct {
 	INFO     string
@@ -63,6 +71,9 @@ var stringToLevel = map[string]LogLevel{
 
 // Log prints a log message if its level is greater than or equal to the logger's levels
 func Log(level string, msg string, prefix, api bool, color string) {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	LEVEL := stringToLevel[level]
 	for _, logger := range loggers {
 		if api {
@@ -94,7 +105,8 @@ func Log(level string, msg string, prefix, api bool, color string) {
 		}
 		err := logger.logger.Output(3, writeOut) // 3 skips this function for correct file:line
 		if err != nil {
-			log.Printf("failed to log message '%v' with error `%v`", msg, err)
+			// Improved error handling - log to stderr instead of stdout
+			fmt.Fprintf(os.Stderr, "failed to log message '%v' with error `%v`\n", msg, err)
 		}
 	}
 	if level == levels.FATAL {
@@ -108,6 +120,8 @@ func Debugf(format string, a ...interface{}) {
 	messageToSend := fmt.Sprintf(format, a...)
 	if len(loggers) > 0 {
 		Log(levels.DEBUG, messageToSend, true, false, GRAY)
+	} else if globalLogger != nil {
+		globalLogger.Debugf(format, a...)
 	} else {
 		log.Println("[DEBUG]", messageToSend)
 	}
@@ -117,6 +131,8 @@ func Infof(format string, a ...interface{}) {
 	messageToSend := fmt.Sprintf(format, a...)
 	if len(loggers) > 0 {
 		Log(levels.INFO, messageToSend, true, false, "")
+	} else if globalLogger != nil {
+		globalLogger.Infof(format, a...)
 	} else {
 		log.Println("[INFO]", messageToSend)
 	}
@@ -126,6 +142,8 @@ func Warningf(format string, a ...interface{}) {
 	messageToSend := fmt.Sprintf(format, a...)
 	if len(loggers) > 0 {
 		Log(levels.WARNING, messageToSend, true, false, YELLOW)
+	} else if globalLogger != nil {
+		globalLogger.Warnf(format, a...)
 	} else {
 		log.Println("[WARN ]", messageToSend)
 	}
@@ -135,6 +153,8 @@ func Errorf(format string, a ...interface{}) {
 	messageToSend := fmt.Sprintf(format, a...)
 	if len(loggers) > 0 {
 		Log(levels.ERROR, messageToSend, true, false, RED)
+	} else if globalLogger != nil {
+		globalLogger.Errorf(format, a...)
 	} else {
 		log.Println("[ERROR]", messageToSend)
 	}
@@ -144,6 +164,8 @@ func Fatalf(format string, a ...interface{}) {
 	messageToSend := fmt.Sprintf(format, a...)
 	if len(loggers) > 0 {
 		Log(levels.FATAL, messageToSend, true, false, RED)
+	} else if globalLogger != nil {
+		globalLogger.Fatalf(format, a...)
 	} else {
 		log.Println("[FATAL]", messageToSend)
 		os.Exit(1)
@@ -152,15 +174,19 @@ func Fatalf(format string, a ...interface{}) {
 
 func Apif(statusCode int, format string, a ...interface{}) {
 	messageToSend := fmt.Sprintf(format, a...)
-	var levelStr, colorStr string
-	if statusCode > 304 && statusCode < 500 {
-		levelStr, colorStr = levels.WARNING, YELLOW
-	} else if statusCode >= 500 {
-		levelStr, colorStr = levels.ERROR, RED
+	if globalLogger != nil {
+		globalLogger.APIf(statusCode, format, a...)
 	} else {
-		levelStr, colorStr = levels.INFO, GREEN
+		var levelStr, colorStr string
+		if statusCode > 304 && statusCode < 500 {
+			levelStr, colorStr = levels.WARNING, YELLOW
+		} else if statusCode >= 500 {
+			levelStr, colorStr = levels.ERROR, RED
+		} else {
+			levelStr, colorStr = levels.INFO, GREEN
+		}
+		Log(levelStr, messageToSend, false, true, colorStr)
 	}
-	Log(levelStr, messageToSend, false, true, colorStr)
 }
 
 // --- Sprint-style logging functions (space-separated arguments) ---
@@ -177,6 +203,8 @@ func Debug(a ...interface{}) {
 	messageToSend := sprintArgs(a...)
 	if len(loggers) > 0 {
 		Log(levels.DEBUG, messageToSend, true, false, GRAY)
+	} else if globalLogger != nil {
+		globalLogger.Debug(messageToSend)
 	} else {
 		log.Println("[DEBUG]", messageToSend)
 	}
@@ -186,6 +214,8 @@ func Info(a ...interface{}) {
 	messageToSend := sprintArgs(a...)
 	if len(loggers) > 0 {
 		Log(levels.INFO, messageToSend, true, false, "")
+	} else if globalLogger != nil {
+		globalLogger.Info(messageToSend)
 	} else {
 		log.Println("[INFO]", messageToSend)
 	}
@@ -195,6 +225,8 @@ func Warning(a ...interface{}) {
 	messageToSend := sprintArgs(a...)
 	if len(loggers) > 0 {
 		Log(levels.WARNING, messageToSend, true, false, YELLOW)
+	} else if globalLogger != nil {
+		globalLogger.Warn(messageToSend)
 	} else {
 		log.Println("[WARN ]", messageToSend)
 	}
@@ -204,6 +236,8 @@ func Error(a ...interface{}) {
 	messageToSend := sprintArgs(a...)
 	if len(loggers) > 0 {
 		Log(levels.ERROR, messageToSend, true, false, RED)
+	} else if globalLogger != nil {
+		globalLogger.Error(messageToSend)
 	} else {
 		log.Println("[ERROR]", messageToSend)
 	}
@@ -213,6 +247,8 @@ func Fatal(a ...interface{}) {
 	messageToSend := sprintArgs(a...)
 	if len(loggers) > 0 {
 		Log(levels.FATAL, messageToSend, true, false, RED)
+	} else if globalLogger != nil {
+		globalLogger.Fatal(messageToSend)
 	} else {
 		log.Println("[FATAL]", messageToSend)
 		os.Exit(1)
@@ -221,13 +257,17 @@ func Fatal(a ...interface{}) {
 
 func Api(statusCode int, a ...interface{}) {
 	messageToSend := sprintArgs(a...)
-	var levelStr, colorStr string
-	if statusCode > 304 && statusCode < 500 {
-		levelStr, colorStr = levels.WARNING, YELLOW
-	} else if statusCode >= 500 {
-		levelStr, colorStr = levels.ERROR, RED
+	if globalLogger != nil {
+		globalLogger.API(statusCode, messageToSend)
 	} else {
-		levelStr, colorStr = levels.INFO, GREEN
+		var levelStr, colorStr string
+		if statusCode > 304 && statusCode < 500 {
+			levelStr, colorStr = levels.WARNING, YELLOW
+		} else if statusCode >= 500 {
+			levelStr, colorStr = levels.ERROR, RED
+		} else {
+			levelStr, colorStr = levels.INFO, GREEN
+		}
+		Log(levelStr, messageToSend, false, true, colorStr)
 	}
-	Log(levelStr, messageToSend, false, true, colorStr)
 }
