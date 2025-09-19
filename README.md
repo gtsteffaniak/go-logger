@@ -402,6 +402,248 @@ err := logger.EnableCompatibilityMode(config)
 
 ## Examples
 
+### JSON Logging
+
+JSON logging provides structured output that's perfect for log aggregation systems like ELK stack, Fluentd, or cloud logging services.
+
+```go
+package main
+
+import (
+    "context"
+    "github.com/gtsteffaniak/go-logger/logger"
+)
+
+func main() {
+    // Configure for JSON output
+    config := logger.JsonConfig{
+        Levels:    "INFO,DEBUG,WARNING,ERROR",
+        ApiLevels: "INFO,ERROR,WARNING",
+        Json:      true,  // Enable JSON output
+        Utc:       true,  // Use UTC timestamps
+    }
+
+    log, err := logger.NewLogger(config)
+    if err != nil {
+        panic(err)
+    }
+
+    // Basic JSON logging
+    log.Info("Application started")
+    // Output: {"time":"2025-09-18T19:14:56Z","level":"INFO","msg":"Application started"}
+
+    // Structured JSON logging with key-value pairs
+    log.Info("User login",
+        "user_id", 12345,
+        "email", "user@example.com",
+        "ip_address", "192.168.1.100",
+        "user_agent", "Mozilla/5.0...",
+        "login_method", "oauth",
+    )
+    // Output: {"time":"2025-09-18T19:14:56Z","level":"INFO","msg":"User login","user_id":12345,"email":"user@example.com","ip_address":"192.168.1.100","user_agent":"Mozilla/5.0...","login_method":"oauth"}
+
+    // Context-aware JSON logging
+    ctx := context.WithValue(context.Background(), "request_id", "req-abc123")
+    ctx = context.WithValue(ctx, "user_id", 12345)
+    
+    log.InfoContext(ctx, "Processing payment",
+        "amount", 99.99,
+        "currency", "USD",
+        "payment_method", "credit_card",
+        "transaction_id", "txn-xyz789",
+    )
+
+    // API logging with JSON
+    log.APIContext(ctx, 200, "Payment processed successfully",
+        "response_time_ms", 150,
+        "bytes_sent", 1024,
+    )
+
+    // Error logging with stack trace information
+    log.Error("Database connection failed",
+        "database", "users_db",
+        "host", "db.example.com",
+        "port", 5432,
+        "error", "connection timeout",
+        "retry_count", 3,
+    )
+
+    // Grouped logging for API endpoints
+    apiLogger := log.WithGroup("api")
+    apiLogger.Info("Request received",
+        "method", "POST",
+        "path", "/api/v1/users",
+        "content_type", "application/json",
+    )
+}
+```
+
+### Structured Logging (Text Format)
+
+Structured logging in text format provides human-readable output while maintaining key-value structure.
+
+```go
+package main
+
+import (
+    "context"
+    "time"
+    "github.com/gtsteffaniak/go-logger/logger"
+)
+
+func main() {
+    // Configure for structured text output (not JSON)
+    config := logger.JsonConfig{
+        Levels:     "INFO,DEBUG,WARNING,ERROR",
+        ApiLevels:  "INFO,ERROR,WARNING",
+        Structured: true,  // Enable structured logging
+        Json:       false, // Text format, not JSON
+        NoColors:   false, // Enable colors for better readability
+    }
+
+    log, err := logger.NewLogger(config)
+    if err != nil {
+        panic(err)
+    }
+
+    // Basic structured logging
+    log.Info("Server started",
+        "port", 8080,
+        "environment", "production",
+        "version", "1.2.3",
+    )
+    // Output: 2025/09/18 19:14:56 [INFO ] Server started port=8080 environment=production version=1.2.3
+
+    // Business logic logging
+    log.Info("Order created",
+        "order_id", "ORD-12345",
+        "customer_id", 67890,
+        "total_amount", 149.99,
+        "currency", "USD",
+        "items_count", 3,
+        "shipping_method", "express",
+    )
+
+    // Performance monitoring
+    start := time.Now()
+    // ... some operation ...
+    duration := time.Since(start)
+    
+    log.Info("Database query completed",
+        "query", "SELECT * FROM users WHERE active = true",
+        "duration_ms", duration.Milliseconds(),
+        "rows_returned", 1250,
+        "cache_hit", false,
+    )
+
+    // Error logging with context
+    log.Error("Failed to process payment",
+        "payment_id", "pay-abc123",
+        "error_code", "INSUFFICIENT_FUNDS",
+        "error_message", "Account balance too low",
+        "retry_after", "2025-09-19T10:00:00Z",
+    )
+
+    // Context-aware logging
+    ctx := context.WithValue(context.Background(), "trace_id", "trace-xyz789")
+    ctx = context.WithValue(ctx, "user_id", 12345)
+    
+    log.InfoContext(ctx, "User action performed",
+        "action", "view_profile",
+        "target_user_id", 67890,
+        "timestamp", time.Now().Unix(),
+    )
+
+    // Service-specific logging
+    userServiceLogger := log.With("service", "user-service", "version", "2.1.0")
+    userServiceLogger.Info("User profile updated",
+        "user_id", 12345,
+        "fields_updated", []string{"email", "phone"},
+        "updated_by", "self",
+    )
+
+    // API endpoint logging
+    apiLogger := log.WithGroup("api")
+    apiLogger.Info("Request processed",
+        "method", "GET",
+        "path", "/api/v1/users/12345",
+        "status_code", 200,
+        "response_time_ms", 45,
+        "user_agent", "MyApp/1.0",
+    )
+}
+```
+
+### Comparison: JSON vs Structured Text
+
+```go
+package main
+
+import (
+    "github.com/gtsteffaniak/go-logger/logger"
+)
+
+func main() {
+    // JSON Configuration
+    jsonConfig := logger.JsonConfig{
+        Levels: "INFO,DEBUG",
+        Json:   true,
+        Utc:    true,
+    }
+    
+    jsonLog, _ := logger.NewLogger(jsonConfig)
+    jsonLog.Info("User action", "user_id", 123, "action", "login")
+    // Output: {"time":"2025-09-18T19:14:56Z","level":"INFO","msg":"User action","user_id":123,"action":"login"}
+
+    // Structured Text Configuration
+    textConfig := logger.JsonConfig{
+        Levels:     "INFO,DEBUG",
+        Structured: true,
+        Json:       false,
+        NoColors:   false,
+    }
+    
+    textLog, _ := logger.NewLogger(textConfig)
+    textLog.Info("User action", "user_id", 123, "action", "login")
+    // Output: 2025/09/18 19:14:56 [INFO ] User action user_id=123 action=login
+}
+```
+
+### File Output Examples
+
+```go
+package main
+
+import (
+    "github.com/gtsteffaniak/go-logger/logger"
+)
+
+func main() {
+    // JSON logging to file
+    jsonConfig := logger.JsonConfig{
+        Levels: "INFO,DEBUG,WARNING,ERROR",
+        Json:   true,
+        Output: "/var/log/app.json",  // Log to file
+        Utc:    true,
+    }
+    
+    jsonLog, _ := logger.NewLogger(jsonConfig)
+    jsonLog.Info("Application started", "version", "1.0.0")
+
+    // Structured text logging to file
+    textConfig := logger.JsonConfig{
+        Levels:     "INFO,DEBUG,WARNING,ERROR",
+        Structured: true,
+        Json:       false,
+        Output:     "/var/log/app.log",  // Log to file
+        NoColors:   true,  // No colors in file output
+    }
+    
+    textLog, _ := logger.NewLogger(textConfig)
+    textLog.Info("Application started", "version", "1.0.0")
+}
+```
+
 See [main.go](./main.go) for comprehensive examples of both legacy and modern usage patterns.
 
 ## Linting
