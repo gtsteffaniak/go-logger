@@ -116,6 +116,32 @@ func (h *customHandler) formatSource(pc uintptr) string {
 		return ""
 	}
 
+	// Get the call stack and skip frames to reach the actual application code
+	// The call stack is: application code -> logger wrapper -> slog -> customHandler
+	callers := make([]uintptr, 10)
+	n := runtime.Callers(0, callers)
+
+	// Skip the first few frames to get to the application code
+	// Frame 0: formatSource
+	// Frame 1: Handle
+	// Frame 2: slog internal
+	// Frame 3: logger wrapper (Infof, Debugf, etc.)
+	// Frame 4: application code <- This is what we want
+	skipFrames := 5
+	if n > skipFrames {
+		frames := runtime.CallersFrames(callers[skipFrames:])
+		frame, _ := frames.Next()
+
+		// Extract just the filename and line number
+		file := frame.File
+		if idx := strings.LastIndex(file, "/"); idx != -1 {
+			file = file[idx+1:]
+		}
+
+		return fmt.Sprintf("%s:%d", file, frame.Line)
+	}
+
+	// Fallback to the original PC if we can't get enough frames
 	frames := runtime.CallersFrames([]uintptr{pc})
 	frame, _ := frames.Next()
 

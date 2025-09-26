@@ -103,7 +103,7 @@ func Log(level string, msg string, prefix, api bool, color string) {
 		if logger.Colors && color != "" {
 			writeOut = writeOut + "\033[0m"
 		}
-		err := logger.logger.Output(4, writeOut) // 4 skips this function and the wrapper functions for correct file:line
+		err := logger.logger.Output(5, writeOut) // 5 skips this function and the wrapper functions for correct file:line
 		if err != nil {
 			// Improved error handling - log to stderr instead of stdout
 			fmt.Fprintf(os.Stderr, "failed to log message '%v' with error `%v`\n", msg, err)
