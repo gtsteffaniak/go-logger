@@ -457,7 +457,7 @@ func (ml *modernLogger) writeToConfig(config *LoggerConfig, levelStr, msg string
 		writeOut = writeOut + "\033[0m"
 	}
 
-	err := config.logger.Output(3, writeOut)
+	err := config.logger.Output(4, writeOut)
 	if err != nil {
 		log.Printf("failed to log message '%v' with error `%v`", msg, err)
 	}
