@@ -136,8 +136,8 @@ func TestInfo_FallbackLogger(t *testing.T) {
 
 	// USE Infof for formatting
 	Infof("Message for %s", "fallback_user")
-	// Fallback for Infof is log.Println("[INFO]", messageToSend)
-	expectedOutput := "[INFO] Message for fallback_user\n"
+	// Fallback for Infof is log.Printf("[%s] %s", level, message) where level is "INFO " (with trailing space)
+	expectedOutput := "[INFO ] Message for fallback_user\n"
 	actualOutput := buf.String()
 
 	if actualOutput != expectedOutput {
@@ -147,7 +147,7 @@ func TestInfo_FallbackLogger(t *testing.T) {
 	buf.Reset()
 	// USE Infof for single string formatted
 	Infof("Simple info fallback")
-	expectedSimple := "[INFO] Simple info fallback\n"
+	expectedSimple := "[INFO ] Simple info fallback\n"
 	actualSimple := buf.String()
 	if actualSimple != expectedSimple {
 		t.Errorf("Expected simple fallback log output '%s', got '%s'", expectedSimple, actualSimple)
@@ -156,7 +156,7 @@ func TestInfo_FallbackLogger(t *testing.T) {
 	buf.Reset()
 	// Test Info (Sprint) fallback
 	Info("Simple", "sprint", "fallback")
-	expectedSprintFallback := "[INFO] Simple sprint fallback\n"
+	expectedSprintFallback := "[INFO ] Simple sprint fallback\n"
 	actualSprintFallback := buf.String()
 	if actualSprintFallback != expectedSprintFallback {
 		t.Errorf("Expected Sprint fallback log output '%s', got '%s'", expectedSprintFallback, actualSprintFallback)
