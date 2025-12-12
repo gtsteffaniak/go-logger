@@ -13,7 +13,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: 'stable'
-        run: go test -race -v ./...
+      - run: go test -race -v ./...
   lint:
     runs-on: ubuntu-latest
     steps:
