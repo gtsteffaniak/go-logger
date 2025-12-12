@@ -8,6 +8,15 @@ import (
 	"github.com/gtsteffaniak/go-logger/logger"
 )
 
+// Define custom types for context keys to avoid collisions
+type contextKey string
+
+const (
+	requestIDKey contextKey = "request_id"
+	userIDKey    contextKey = "user_id"
+	traceIDKey   contextKey = "trace_id"
+)
+
 func main() {
 	// Legacy usage (backward compatible)
 	legacyExample()
@@ -83,7 +92,7 @@ func modernExample() {
 	)
 
 	// Context-aware logging
-	ctx := context.WithValue(context.Background(), "request_id", "req-123")
+	ctx := context.WithValue(context.Background(), requestIDKey, "req-123")
 	log.InfoContext(ctx, "Processing request",
 		"endpoint", "/api/users",
 		"method", "GET",
@@ -163,8 +172,8 @@ func jsonLoggingExample() {
 	)
 
 	// Context-aware JSON logging
-	ctx := context.WithValue(context.Background(), "request_id", "req-abc123")
-	ctx = context.WithValue(ctx, "user_id", 12345)
+	ctx := context.WithValue(context.Background(), requestIDKey, "req-abc123")
+	ctx = context.WithValue(ctx, userIDKey, 12345)
 
 	log.InfoContext(ctx, "Processing payment",
 		"amount", 99.99,
@@ -260,8 +269,8 @@ func structuredLoggingExample() {
 	)
 
 	// Context-aware logging
-	ctx := context.WithValue(context.Background(), "trace_id", "trace-xyz789")
-	ctx = context.WithValue(ctx, "user_id", 12345)
+	ctx := context.WithValue(context.Background(), traceIDKey, "trace-xyz789")
+	ctx = context.WithValue(ctx, userIDKey, 12345)
 
 	log.InfoContext(ctx, "User action performed",
 		"action", "view_profile",

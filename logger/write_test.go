@@ -57,7 +57,6 @@ func setupForFallbackTest(t *testing.T, buf *bytes.Buffer) {
 }
 
 // Regex patterns for prefix stripping (no changes needed)
-var infoPrimaryLogPattern_NonDebug = regexp.MustCompile(`^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\s(.*\n)$`)
 var infoPrimaryLogPattern_DebugMode = regexp.MustCompile(`^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\s\[INFO\s+\]\s[a-zA-Z0-9._/-]+:\d+:\s(.*\n)$`)
 var debugPrimaryLogPattern = regexp.MustCompile(`^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\s\[DEBUG\]\s[a-zA-Z0-9._/-]+:\d+:\s(.*\n)$`)
 var warnPrimaryLogPattern_NonDebug = regexp.MustCompile(`^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\s\[WARN\s+\]\s(.*\n)$`)
@@ -88,8 +87,6 @@ func TestInfo_PrimaryLogger(t *testing.T) {
 		actualOutput := buf.String()
 		// The Log function for Infof (and Info) now has prefix=true.
 		// If logger.debugEnabled is false, prefix for INFO is "timestamp [INFO ] "
-		// This regex needs to match that if infoPrimaryLogPattern_NonDebug is "timestamp "
-		// Let's assume infoPrimaryLogPattern_NonDebug is for when prefix=false in Log OR (prefix=true AND level is not one that gets [LEVEL] like INFO)
 		// Your Log function: if prefix || logger.debugEnabled { fmt.Sprintf("%s [%s] ", formattedTime, level) } else { formattedTime + " " }
 		// For Infof, prefix is true. So it will always be "YYYY/MM/DD HH:MM:SS [INFO ] "
 		// Let's define a generic pattern for this or adjust.
