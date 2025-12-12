@@ -15,9 +15,11 @@ import (
 
 // modernLogger implements the Logger interface with modern Go practices
 type modernLogger struct {
-	mu      sync.RWMutex
-	configs []*LoggerConfig
-	slog    *slog.Logger
+	mu       sync.RWMutex
+	configs  []*LoggerConfig
+	slog     *slog.Logger
+	handlers []slog.Handler
+	outputs  []io.Writer
 }
 
 // NewLogger creates a new Logger instance with modern features
@@ -68,11 +70,126 @@ func NewLogger(config JsonConfig) (Logger, error) {
 	}
 
 	ml := &modernLogger{
-		configs: []*LoggerConfig{loggerInstance},
-		slog:    slog.New(slogHandler),
+		configs:  []*LoggerConfig{loggerInstance},
+		handlers: []slog.Handler{slogHandler},
+		outputs:  []io.Writer{output},
 	}
+	// Create a multi-handler for slog
+	ml.slog = slog.New(newMultiHandler(ml.handlers))
 
 	return ml, nil
+}
+
+// addConfig adds a new logger configuration to an existing modernLogger
+func (ml *modernLogger) addConfig(config JsonConfig) error {
+	ml.mu.Lock()
+	defer ml.mu.Unlock()
+
+	// Convert JsonConfig to LoggerConfig
+	loggerConfig, err := convertJsonConfigToLoggerConfig(config)
+	if err != nil {
+		return fmt.Errorf("convert config: %w", err)
+	}
+
+	// Create output writer
+	var output io.Writer = os.Stdout
+	if config.Output != "" && strings.ToUpper(config.Output) != "STDOUT" {
+		file, err := os.OpenFile(config.Output, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			return fmt.Errorf("failed to open log file: %w", err)
+		}
+		output = file
+	}
+
+	slogLevel := convertLogLevelsToSlogLevel(config.Levels)
+
+	// Create handler for this config
+	var slogHandler slog.Handler
+	if config.Json {
+		slogHandler = slog.NewJSONHandler(output, &slog.HandlerOptions{
+			AddSource: true,
+			Level:     slogLevel,
+			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+				if a.Key == slog.SourceKey {
+					source := a.Value.Any().(*slog.Source)
+					source.File = stripProjectPath(source.File)
+					source.Function = stripFunctionPath(source.Function)
+				}
+				return a
+			},
+		})
+	} else {
+		slogHandler = NewCustomHandler(output, slogLevel, loggerConfig)
+	}
+
+	// Create the logger instance
+	loggerInstance, err := AddLogger(*loggerConfig)
+	if err != nil {
+		return fmt.Errorf("create logger instance: %w", err)
+	}
+
+	// Add to arrays
+	ml.configs = append(ml.configs, loggerInstance)
+	ml.handlers = append(ml.handlers, slogHandler)
+	ml.outputs = append(ml.outputs, output)
+
+	// Recreate slog logger with all handlers
+	ml.slog = slog.New(newMultiHandler(ml.handlers))
+
+	return nil
+}
+
+// multiHandler is a slog.Handler that writes to multiple handlers
+type multiHandler struct {
+	handlers []slog.Handler
+}
+
+// newMultiHandler creates a new multi-handler that writes to all provided handlers
+func newMultiHandler(handlers []slog.Handler) *multiHandler {
+	return &multiHandler{handlers: handlers}
+}
+
+// Enabled returns true if any handler is enabled for the given level
+func (m *multiHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	for _, h := range m.handlers {
+		if h.Enabled(ctx, level) {
+			return true
+		}
+	}
+	return false
+}
+
+// Handle writes the record to all handlers
+func (m *multiHandler) Handle(ctx context.Context, r slog.Record) error {
+	var firstErr error
+	for _, h := range m.handlers {
+		if h.Enabled(ctx, r.Level) {
+			// Clone the record for each handler to avoid issues
+			cloned := r.Clone()
+			if err := h.Handle(ctx, cloned); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
+// WithAttrs returns a new multi-handler with additional attributes
+func (m *multiHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	newHandlers := make([]slog.Handler, len(m.handlers))
+	for i, h := range m.handlers {
+		newHandlers[i] = h.WithAttrs(attrs)
+	}
+	return newMultiHandler(newHandlers)
+}
+
+// WithGroup returns a new multi-handler with a group name
+func (m *multiHandler) WithGroup(name string) slog.Handler {
+	newHandlers := make([]slog.Handler, len(m.handlers))
+	for i, h := range m.handlers {
+		newHandlers[i] = h.WithGroup(name)
+	}
+	return newMultiHandler(newHandlers)
 }
 
 // convertLogLevelsToSlogLevel converts the logger levels to slog level
@@ -326,13 +443,13 @@ func (ml *modernLogger) logWithLevel(level LogLevel, msg string, formatted bool,
 	defer ml.mu.RUnlock()
 
 	// Use structured logging if enabled and args are provided
-	if len(args) > 0 && ml.configs[0].Structured {
+	if len(ml.configs) > 0 && len(args) > 0 && ml.configs[0].Structured {
 		ml.slogStructuredLog(level, msg, args...)
 		return
 	}
 
 	// Use slog for all logging if structured output is enabled (even without args)
-	if ml.configs[0].Structured {
+	if len(ml.configs) > 0 && ml.configs[0].Structured {
 		ml.slogStructuredLog(level, msg, args...)
 		return
 	}

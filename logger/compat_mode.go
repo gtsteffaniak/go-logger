@@ -2,12 +2,11 @@ package logger
 
 import (
 	"fmt"
-	"strings"
 )
 
 // CompatibilityMode enables global logger functions for backward compatibility.
 //
-// ⚠️  WARNING: This creates global state which is considered bad practice in Go.
+// This creates global state which is considered bad practice in Go.
 // Consider using dependency injection instead:
 //
 //	logger := logger.NewLogger(config)
@@ -16,17 +15,30 @@ import (
 // This function is provided for backward compatibility only.
 // New code should prefer explicit logger instances.
 func EnableCompatibilityMode(config JsonConfig) error {
+	existingLogger := GetCompatibilityLogger()
+	if existingLogger != nil {
+		// Try to add this config to the existing logger
+		if ml, ok := existingLogger.(*modernLogger); ok {
+			err := ml.addConfig(config)
+			if err != nil {
+				return fmt.Errorf("add config to existing logger: %w", err)
+			}
+
+			// Don't call SetupLogger when using modern logger - it populates the legacy loggers array
+			// which causes the global logger functions to use the legacy path instead of the modern logger
+			return nil
+		}
+	}
+
 	logger, err := NewLogger(config)
 	if err != nil {
 		return fmt.Errorf("enable compatibility mode: %w", err)
 	}
 	SetGlobalLogger(logger)
 
-	// Try to setup legacy logger, but don't fail if it already exists
-	err = SetupLogger(config)
-	if err != nil && !strings.Contains(err.Error(), "stdout logger already exists") {
-		return fmt.Errorf("setup legacy logger: %w", err)
-	}
+	// Don't call SetupLogger when using modern logger - it populates the legacy loggers array
+	// which causes the global logger functions to use the legacy path instead of the modern logger
+	// The modern logger handles all logging through the globalLogger interface
 
 	return nil
 }
