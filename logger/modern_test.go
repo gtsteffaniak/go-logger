@@ -3,20 +3,30 @@ package logger
 import (
 	"bytes"
 	"context"
+	"io"
 	"log/slog"
 	"strings"
 	"testing"
 	"time"
 )
 
+// Define custom types for context keys to avoid collisions in tests
+type testContextKey string
+
+const (
+	testRequestIDKey testContextKey = "request_id"
+	testKey          testContextKey = "test"
+)
+
 func TestModernLogger_StructuredLogging(t *testing.T) {
 	var buf bytes.Buffer
 
 	config := JsonConfig{
-		Levels:    "INFO,DEBUG",
-		ApiLevels: "INFO,ERROR",
-		NoColors:  true,
-		Json:      false,
+		Levels:     "INFO,DEBUG",
+		ApiLevels:  "INFO,ERROR",
+		NoColors:   true,
+		Json:       false,
+		Structured: true, // Enable structured logging
 	}
 
 	logger, err := NewLogger(config)
@@ -52,10 +62,11 @@ func TestModernLogger_ContextAwareLogging(t *testing.T) {
 	var buf bytes.Buffer
 
 	config := JsonConfig{
-		Levels:    "INFO",
-		ApiLevels: "INFO",
-		NoColors:  true,
-		Json:      false,
+		Levels:     "INFO",
+		ApiLevels:  "INFO",
+		NoColors:   true,
+		Json:       false,
+		Structured: true, // Enable structured logging
 	}
 
 	logger, err := NewLogger(config)
@@ -69,7 +80,7 @@ func TestModernLogger_ContextAwareLogging(t *testing.T) {
 	}))
 
 	// Test context-aware logging
-	ctx := context.WithValue(context.Background(), "request_id", "req-123")
+	ctx := context.WithValue(context.Background(), testRequestIDKey, "req-123")
 	logger.InfoContext(ctx, "Processing request",
 		"endpoint", "/api/users",
 		"method", "GET",
@@ -85,10 +96,11 @@ func TestModernLogger_WithMethod(t *testing.T) {
 	var buf bytes.Buffer
 
 	config := JsonConfig{
-		Levels:    "INFO",
-		ApiLevels: "INFO",
-		NoColors:  true,
-		Json:      false,
+		Levels:     "INFO",
+		ApiLevels:  "INFO",
+		NoColors:   true,
+		Json:       false,
+		Structured: true, // Enable structured logging
 	}
 
 	logger, err := NewLogger(config)
@@ -115,10 +127,11 @@ func TestModernLogger_WithGroup(t *testing.T) {
 	var buf bytes.Buffer
 
 	config := JsonConfig{
-		Levels:    "INFO",
-		ApiLevels: "INFO",
-		NoColors:  true,
-		Json:      false,
+		Levels:     "INFO",
+		ApiLevels:  "INFO",
+		NoColors:   true,
+		Json:       false,
+		Structured: true, // Enable structured logging
 	}
 
 	logger, err := NewLogger(config)
@@ -145,10 +158,11 @@ func TestModernLogger_API_Logging(t *testing.T) {
 	var buf bytes.Buffer
 
 	config := JsonConfig{
-		Levels:    "INFO,WARNING,ERROR",
-		ApiLevels: "INFO,WARNING,ERROR",
-		NoColors:  true,
-		Json:      false,
+		Levels:     "INFO,WARNING,ERROR",
+		ApiLevels:  "INFO,WARNING,ERROR",
+		NoColors:   true,
+		Json:       false,
+		Structured: true, // Enable structured logging
 	}
 
 	logger, err := NewLogger(config)
@@ -174,10 +188,11 @@ func TestModernLogger_APIContext(t *testing.T) {
 	var buf bytes.Buffer
 
 	config := JsonConfig{
-		Levels:    "INFO,WARNING,ERROR",
-		ApiLevels: "INFO,WARNING,ERROR",
-		NoColors:  true,
-		Json:      false,
+		Levels:     "INFO,WARNING,ERROR",
+		ApiLevels:  "INFO,WARNING,ERROR",
+		NoColors:   true,
+		Json:       false,
+		Structured: true, // Enable structured logging
 	}
 
 	logger, err := NewLogger(config)
@@ -191,7 +206,7 @@ func TestModernLogger_APIContext(t *testing.T) {
 	}))
 
 	// Test API context logging
-	ctx := context.WithValue(context.Background(), "request_id", "req-456")
+	ctx := context.WithValue(context.Background(), testRequestIDKey, "req-456")
 	logger.APIContext(ctx, 404, "Resource not found", "path", "/api/users/999")
 
 	output := buf.String()
@@ -232,7 +247,7 @@ func TestCompatibilityLayer_GlobalFunctions(t *testing.T) {
 	// These should not panic even without a global logger set
 
 	// Test global context functions (should fall back to legacy)
-	ctx := context.WithValue(context.Background(), "test", "value")
+	ctx := context.WithValue(context.Background(), testKey, "value")
 	InfoContext(ctx, "Global context info", "key", "value")
 	DebugfContext(ctx, "Global context debug: %s", "test")
 
@@ -366,11 +381,28 @@ func TestThreadSafety(t *testing.T) {
 		ApiLevels: "INFO",
 		NoColors:  true,
 		Json:      false,
+		// Structured: false - test with legacy logging path
 	}
 
 	logger, err := NewLogger(config)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
+	}
+
+	ml := logger.(*modernLogger)
+
+	// Redirect output to discard to avoid cluttering test output
+	// We're only testing thread safety, not the actual log content
+	// Redirect both structured (slog) and legacy logger outputs
+	ml.slog = slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+
+	// Redirect legacy logger output when Structured is false
+	for _, cfg := range ml.configs {
+		if cfg.logger != nil {
+			cfg.logger.SetOutput(io.Discard)
+		}
 	}
 
 	// Run concurrent logging

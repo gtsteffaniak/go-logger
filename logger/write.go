@@ -114,58 +114,47 @@ func Log(level string, msg string, prefix, api bool, color string) {
 	}
 }
 
+// logMessage is a helper function that handles the common pattern of checking
+// globalLogger first, then legacy loggers array, then fallback
+func logMessage(level string, message string, prefix bool, api bool, color string, modernLog func(string)) {
+	if globalLogger != nil {
+		modernLog(message)
+	} else if len(loggers) > 0 {
+		Log(level, message, prefix, api, color)
+	} else {
+		log.Printf("[%s] %s", level, message)
+	}
+}
+
 // --- Sprintf-style logging functions ---
 
 func Debugf(format string, a ...interface{}) {
 	messageToSend := fmt.Sprintf(format, a...)
-	if len(loggers) > 0 {
-		Log(levels.DEBUG, messageToSend, true, false, GRAY)
-	} else if globalLogger != nil {
-		globalLogger.Debugf(format, a...)
-	} else {
-		log.Println("[DEBUG]", messageToSend)
-	}
+	logMessage(levels.DEBUG, messageToSend, true, false, GRAY, func(msg string) { globalLogger.Debugf(format, a...) })
 }
 
 func Infof(format string, a ...interface{}) {
 	messageToSend := fmt.Sprintf(format, a...)
-	if len(loggers) > 0 {
-		Log(levels.INFO, messageToSend, true, false, "")
-	} else if globalLogger != nil {
-		globalLogger.Infof(format, a...)
-	} else {
-		log.Println("[INFO]", messageToSend)
-	}
+	logMessage(levels.INFO, messageToSend, true, false, "", func(msg string) { globalLogger.Infof(format, a...) })
 }
 
 func Warningf(format string, a ...interface{}) {
 	messageToSend := fmt.Sprintf(format, a...)
-	if len(loggers) > 0 {
-		Log(levels.WARNING, messageToSend, true, false, YELLOW)
-	} else if globalLogger != nil {
-		globalLogger.Warnf(format, a...)
-	} else {
-		log.Println("[WARN ]", messageToSend)
-	}
+	logMessage(levels.WARNING, messageToSend, true, false, YELLOW, func(msg string) { globalLogger.Warnf(format, a...) })
 }
 
 func Errorf(format string, a ...interface{}) {
 	messageToSend := fmt.Sprintf(format, a...)
-	if len(loggers) > 0 {
-		Log(levels.ERROR, messageToSend, true, false, RED)
-	} else if globalLogger != nil {
-		globalLogger.Errorf(format, a...)
-	} else {
-		log.Println("[ERROR]", messageToSend)
-	}
+	logMessage(levels.ERROR, messageToSend, true, false, RED, func(msg string) { globalLogger.Errorf(format, a...) })
 }
 
 func Fatalf(format string, a ...interface{}) {
 	messageToSend := fmt.Sprintf(format, a...)
-	if len(loggers) > 0 {
-		Log(levels.FATAL, messageToSend, true, false, RED)
-	} else if globalLogger != nil {
+	if globalLogger != nil {
 		globalLogger.Fatalf(format, a...)
+	} else if len(loggers) > 0 {
+		Log(levels.FATAL, messageToSend, true, false, RED)
+		os.Exit(1)
 	} else {
 		log.Println("[FATAL]", messageToSend)
 		os.Exit(1)
@@ -200,55 +189,28 @@ func sprintArgs(a ...interface{}) string {
 }
 
 func Debug(a ...interface{}) {
-	messageToSend := sprintArgs(a...)
-	if len(loggers) > 0 {
-		Log(levels.DEBUG, messageToSend, true, false, GRAY)
-	} else if globalLogger != nil {
-		globalLogger.Debug(messageToSend)
-	} else {
-		log.Println("[DEBUG]", messageToSend)
-	}
+	logMessage(levels.DEBUG, sprintArgs(a...), true, false, GRAY, func(msg string) { globalLogger.Debug(msg) })
 }
 
 func Info(a ...interface{}) {
-	messageToSend := sprintArgs(a...)
-	if len(loggers) > 0 {
-		Log(levels.INFO, messageToSend, true, false, "")
-	} else if globalLogger != nil {
-		globalLogger.Info(messageToSend)
-	} else {
-		log.Println("[INFO]", messageToSend)
-	}
+	logMessage(levels.INFO, sprintArgs(a...), true, false, "", func(msg string) { globalLogger.Info(msg) })
 }
 
 func Warning(a ...interface{}) {
-	messageToSend := sprintArgs(a...)
-	if len(loggers) > 0 {
-		Log(levels.WARNING, messageToSend, true, false, YELLOW)
-	} else if globalLogger != nil {
-		globalLogger.Warn(messageToSend)
-	} else {
-		log.Println("[WARN ]", messageToSend)
-	}
+	logMessage(levels.WARNING, sprintArgs(a...), true, false, YELLOW, func(msg string) { globalLogger.Warn(msg) })
 }
 
 func Error(a ...interface{}) {
-	messageToSend := sprintArgs(a...)
-	if len(loggers) > 0 {
-		Log(levels.ERROR, messageToSend, true, false, RED)
-	} else if globalLogger != nil {
-		globalLogger.Error(messageToSend)
-	} else {
-		log.Println("[ERROR]", messageToSend)
-	}
+	logMessage(levels.ERROR, sprintArgs(a...), true, false, RED, func(msg string) { globalLogger.Error(msg) })
 }
 
 func Fatal(a ...interface{}) {
 	messageToSend := sprintArgs(a...)
-	if len(loggers) > 0 {
-		Log(levels.FATAL, messageToSend, true, false, RED)
-	} else if globalLogger != nil {
+	if globalLogger != nil {
 		globalLogger.Fatal(messageToSend)
+	} else if len(loggers) > 0 {
+		Log(levels.FATAL, messageToSend, true, false, RED)
+		os.Exit(1)
 	} else {
 		log.Println("[FATAL]", messageToSend)
 		os.Exit(1)
