@@ -20,7 +20,6 @@ func AddLogger(logger LoggerConfig) (*LoggerConfig, error) {
 	if slices.Contains(logger.Levels, DEBUG) {
 		flags |= log.Lshortfile
 	}
-	fmt.Println("logger", logger.Stdout)
 
 	if logger.Stdout {
 		logger.logger = log.New(os.Stdout, "", flags)
