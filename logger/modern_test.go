@@ -10,6 +10,14 @@ import (
 	"time"
 )
 
+// Define custom types for context keys to avoid collisions in tests
+type testContextKey string
+
+const (
+	testRequestIDKey testContextKey = "request_id"
+	testKey          testContextKey = "test"
+)
+
 func TestModernLogger_StructuredLogging(t *testing.T) {
 	var buf bytes.Buffer
 
@@ -72,7 +80,7 @@ func TestModernLogger_ContextAwareLogging(t *testing.T) {
 	}))
 
 	// Test context-aware logging
-	ctx := context.WithValue(context.Background(), "request_id", "req-123")
+	ctx := context.WithValue(context.Background(), testRequestIDKey, "req-123")
 	logger.InfoContext(ctx, "Processing request",
 		"endpoint", "/api/users",
 		"method", "GET",
@@ -198,7 +206,7 @@ func TestModernLogger_APIContext(t *testing.T) {
 	}))
 
 	// Test API context logging
-	ctx := context.WithValue(context.Background(), "request_id", "req-456")
+	ctx := context.WithValue(context.Background(), testRequestIDKey, "req-456")
 	logger.APIContext(ctx, 404, "Resource not found", "path", "/api/users/999")
 
 	output := buf.String()
@@ -239,7 +247,7 @@ func TestCompatibilityLayer_GlobalFunctions(t *testing.T) {
 	// These should not panic even without a global logger set
 
 	// Test global context functions (should fall back to legacy)
-	ctx := context.WithValue(context.Background(), "test", "value")
+	ctx := context.WithValue(context.Background(), testKey, "value")
 	InfoContext(ctx, "Global context info", "key", "value")
 	DebugfContext(ctx, "Global context debug: %s", "test")
 
