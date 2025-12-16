@@ -165,12 +165,6 @@ func main() {
 }
 ```
 
-Without initialization, package-level functions will print an error message:
-```
-[LOGGER NOT INITIALIZED] [INFO] Hello, World!
-Please call logger.EnableCompatibilityMode() or use logger.NewLogger() for instance-based logging.
-```
-
 ### Dependency Injection
 
 ```go
@@ -420,14 +414,7 @@ func main() {
 
 ## Troubleshooting
 
-### "LOGGER NOT INITIALIZED" Error
-
-If you see this error when calling `logger.Info()`, `logger.Debugf()`, etc.:
-
-```
-[LOGGER NOT INITIALIZED] [INFO] Your message
-Please call logger.EnableCompatibilityMode() or use logger.NewLogger() for instance-based logging.
-```
+### logger not formatting properly
 
 **Solution:** You must initialize the global logger first:
 

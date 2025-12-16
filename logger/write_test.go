@@ -124,23 +124,6 @@ func TestInfo_ModernLogger(t *testing.T) {
 	})
 }
 
-func TestInfo_UninitializedLogger(t *testing.T) {
-	var buf bytes.Buffer
-	setupForUninitializedTest(t, &buf)
-
-	// USE Infof for formatting - should print error message
-	Infof("Message for %s", "uninitialized_user")
-	actualOutput := buf.String()
-
-	// Should contain the "LOGGER NOT INITIALIZED" message
-	if !strings.Contains(actualOutput, "LOGGER NOT INITIALIZED") {
-		t.Errorf("Expected uninitialized logger message, got '%s'", actualOutput)
-	}
-	if !strings.Contains(actualOutput, "Message for uninitialized_user") {
-		t.Errorf("Expected original message in output, got '%s'", actualOutput)
-	}
-}
-
 func TestDebug_ModernLogger(t *testing.T) {
 	var buf bytes.Buffer
 	setupForModernLoggerTest(t, &buf, "DEBUG", true)

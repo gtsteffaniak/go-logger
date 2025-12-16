@@ -69,7 +69,7 @@ func logMessage(level string, message string, modernLog func(string)) {
 	if globalLogger != nil {
 		modernLog(message)
 	} else {
-		log.Printf("[LOGGER NOT INITIALIZED] [%s] %s\nPlease call logger.EnableCompatibilityMode() or use logger.NewLogger() for instance-based logging.", level, message)
+		log.Printf("[%s] %s", level, message)
 	}
 }
 
@@ -100,7 +100,7 @@ func Fatalf(format string, a ...interface{}) {
 	if globalLogger != nil {
 		globalLogger.Fatalf(format, a...)
 	} else {
-		log.Printf("[LOGGER NOT INITIALIZED] [FATAL] %s\nPlease call logger.EnableCompatibilityMode() or use logger.NewLogger() for instance-based logging.", messageToSend)
+		log.Println("[FATAL]", messageToSend)
 		os.Exit(1)
 	}
 }
@@ -110,7 +110,7 @@ func Apif(statusCode int, format string, a ...interface{}) {
 		globalLogger.APIf(statusCode, format, a...)
 	} else {
 		messageToSend := fmt.Sprintf(format, a...)
-		log.Printf("[LOGGER NOT INITIALIZED] [API] %s\nPlease call logger.EnableCompatibilityMode() or use logger.NewLogger() for instance-based logging.", messageToSend)
+		log.Printf("[API] %s\n", messageToSend)
 	}
 }
 
@@ -145,7 +145,7 @@ func Fatal(a ...interface{}) {
 	if globalLogger != nil {
 		globalLogger.Fatal(messageToSend)
 	} else {
-		log.Printf("[LOGGER NOT INITIALIZED] [FATAL] %s\nPlease call logger.EnableCompatibilityMode() or use logger.NewLogger() for instance-based logging.", messageToSend)
+		log.Printf("[FATAL] %s\n", messageToSend)
 		os.Exit(1)
 	}
 }
@@ -155,6 +155,6 @@ func Api(statusCode int, a ...interface{}) {
 	if globalLogger != nil {
 		globalLogger.API(statusCode, messageToSend)
 	} else {
-		log.Printf("[LOGGER NOT INITIALIZED] [API] %s\nPlease call logger.EnableCompatibilityMode() or use logger.NewLogger() for instance-based logging.", messageToSend)
+		log.Printf("[API] %s\n", messageToSend)
 	}
 }
