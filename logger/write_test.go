@@ -3,7 +3,6 @@ package logger
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"regexp"
 	"strings"
 	"testing"
@@ -40,22 +39,6 @@ func setupForModernLoggerTest(t *testing.T, buf *bytes.Buffer, levels string, no
 	}
 
 	return logger
-}
-
-// setupForUninitializedTest ensures no global logger is set
-func setupForUninitializedTest(t *testing.T, buf *bytes.Buffer) {
-	t.Helper()
-	savedGlobalLogger := globalLogger
-	currentGlobalLogOutput := log.Writer()
-	savedGlobalLogFlags := log.Flags()
-	t.Cleanup(func() {
-		globalLogger = savedGlobalLogger
-		log.SetOutput(currentGlobalLogOutput)
-		log.SetFlags(savedGlobalLogFlags)
-	})
-	globalLogger = nil
-	log.SetOutput(buf)
-	log.SetFlags(0)
 }
 
 // Regex patterns for prefix stripping (no changes needed)
