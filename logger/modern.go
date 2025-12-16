@@ -573,7 +573,7 @@ func (ml *modernLogger) writeToConfig(config *LoggerConfig, levelStr, msg string
 		writeOut = writeOut + "\033[0m"
 	}
 
-	err := config.logger.Output(8, writeOut) // 8 skips this function and the wrapper functions for correct file:line
+	err := config.logger.Output(7, writeOut) // 8 skips this function and the wrapper functions for correct file:line
 	if err != nil {
 		// Improved error handling - log to stderr instead of stdout
 		fmt.Fprintf(os.Stderr, "failed to log message '%v' with error `%v`\n", msg, err)
