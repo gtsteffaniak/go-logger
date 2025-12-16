@@ -1,5 +1,5 @@
 # go-logger
-Modern, feature-rich logger for Go applications with backward compatibility
+Modern, feature-rich logger for Go applications
 
 ## Features
 
@@ -12,6 +12,46 @@ Modern, feature-rich logger for Go applications with backward compatibility
 - ✅ **API Logging** - HTTP status code-based logging
 - ✅ **Level Filtering** - Configurable log levels
 - ✅ **Grouped Logging** - Hierarchical log organization
+
+## ⚠️ Breaking Changes (v1.0.0)
+
+**The legacy logging system has been removed.** This includes:
+- ❌ `SetupLogger()` - **REMOVED** 
+- ❌ `SetupLoggerWithModern()` - **REMOVED**
+- ❌ Direct manipulation of internal `loggers` array - **REMOVED**
+
+### Migration Required
+
+If your code uses `SetupLogger()` or `SetupLoggerWithModern()`, you must migrate to one of these options:
+
+**Option 1: Recommended - Use Dependency Injection**
+```go
+// ✅ NEW: Create logger instances and pass them explicitly
+log, err := logger.NewLogger(config)
+if err != nil {
+    panic(err)
+}
+myService := NewMyService(log)
+```
+
+**Option 2: Enable Compatibility Mode (for existing code)**
+```go
+// ✅ NEW: Use EnableCompatibilityMode() for global logger functions
+err := logger.EnableCompatibilityMode(config)
+if err != nil {
+    panic(err)
+}
+// Now logger.Info(), logger.Debugf(), etc. work
+logger.Info("Hello, World!")
+```
+
+### Why This Change?
+
+The legacy system had multiple problems:
+- Duplicate code paths that were hard to maintain
+- Global state causing testing difficulties
+- Hidden dependencies making code harder to understand
+- Incompatibility with modern Go practices
 
 ## Quick Start
 
@@ -99,51 +139,36 @@ func main() {
 }
 ```
 
-### Legacy Usage (Deprecated)
+### ⚠️ Important: Package-Level Functions Require Initialization
+
+If you want to use package-level logging functions (`logger.Info()`, `logger.Debugf()`, etc.) without passing a logger instance, you **must** call `EnableCompatibilityMode()` first:
 
 ```go
 package main
 
-import (
-    "context"
-    "github.com/gtsteffaniak/go-logger/logger"
-)
+import "github.com/gtsteffaniak/go-logger/logger"
 
 func main() {
-    // Setup modern logger
     config := logger.JsonConfig{
-        Levels:    "INFO,DEBUG,WARNING,ERROR",
-        ApiLevels: "INFO,ERROR,WARNING",
-        Json:      false, // Set to true for JSON output
+        Levels: "INFO,DEBUG,WARNING,ERROR",
     }
 
-    err := logger.SetupLoggerWithModern(config)
+    // REQUIRED: Initialize before using package-level functions
+    err := logger.EnableCompatibilityMode(config)
     if err != nil {
-        logger.Errorf("failed to setup logger: %v", err)
+        panic(err)
     }
 
-    // Structured logging
-    logger.Info("User action",
-        "user_id", 123,
-        "action", "login",
-        "ip", "192.168.1.1",
-    )
-
-    // Context-aware logging
-    ctx := context.WithValue(context.Background(), "request_id", "req-123")
-    logger.InfoContext(ctx, "Processing request",
-        "endpoint", "/api/users",
-        "method", "GET",
-    )
-
-    // Logger with additional context
-    userLogger := logger.With("user_id", 456, "session", "sess-789")
-    userLogger.Info("User performed action", "action", "view_profile")
-
-    // Grouped logging
-    apiLogger := logger.WithGroup("api")
-    apiLogger.Info("Request received", "path", "/api/data", "method", "POST")
+    // Now these work:
+    logger.Info("Hello, World!")
+    logger.Debugf("Value: %d", 42)
 }
+```
+
+Without initialization, package-level functions will print an error message:
+```
+[LOGGER NOT INITIALIZED] [INFO] Hello, World!
+Please call logger.EnableCompatibilityMode() or use logger.NewLogger() for instance-based logging.
 ```
 
 ### Dependency Injection
@@ -217,36 +242,39 @@ config := logger.JsonConfig{
 
 **Note:** When `json: true` is set, structured logging is automatically enabled regardless of the `structured` setting.
 
-## Migration Guide
+## Migration Guide (v2.0)
 
-### Why Migrate?
+### ⚠️ Breaking Change: Legacy Functions Removed
 
-The global logger pattern has several drawbacks:
-- **Testing difficulties**: Hard to mock or control logger behavior in tests
-- **Concurrency issues**: Global state can cause race conditions
-- **Hidden dependencies**: Code dependencies are not explicit
-- **Configuration conflicts**: Multiple parts of code can't have different logger configs
+As of v2.0, the following functions have been **removed**:
+- `SetupLogger()` - Use `EnableCompatibilityMode()` instead
+- `SetupLoggerWithModern()` - Use `EnableCompatibilityMode()` instead
 
-### Migration Strategy
+### Quick Fix for v2.0
 
-#### Phase 1: Enable Compatibility Mode (Immediate - No Breaking Changes)
-
-Replace your existing `SetupLogger()` calls with `EnableCompatibilityMode()`:
+If your code breaks after upgrading, replace the old function:
 
 ```go
-// Before
+// ❌ REMOVED in v2.0
 err := logger.SetupLogger(config)
+err := logger.SetupLoggerWithModern(config)
 
-// After
+// ✅ Use this instead
 err := logger.EnableCompatibilityMode(config)
 ```
 
-This gives you:
-- ✅ All existing code works unchanged
-- ✅ Access to modern features (structured logging, context support)
-- ✅ Deprecation warnings to guide future migration
+### Why Migrate to Dependency Injection?
 
-#### Phase 2: Gradual Migration (Recommended)
+While `EnableCompatibilityMode()` keeps your code working, we recommend migrating to dependency injection for:
+- **Better Testing**: Easy to mock and control logger behavior in tests
+- **Thread Safety**: No global state, no race conditions
+- **Explicit Dependencies**: Code dependencies are clear and obvious
+- **Flexibility**: Different parts of code can have different logger configs
+- **Modern Go**: Follows current Go best practices
+
+### Migration Strategy
+
+#### Phase 1: Enable Compatibility Mode (Quick Fix)
 
 Start using dependency injection in new code while keeping existing code working:
 
@@ -276,28 +304,43 @@ func processData(log logger.Logger) {
 }
 ```
 
-### Migration Examples
+Replace global logger setup:
 
-#### Simple Migration
 ```go
-// Before
-package main
+// ❌ OLD (v1.x)
+logger.SetupLogger(config)
+logger.SetupLoggerWithModern(config)
 
-import "github.com/gtsteffaniak/go-logger/logger"
+// ✅ NEW (v2.0)
+logger.EnableCompatibilityMode(config)
+```
 
-func main() {
-    config := logger.JsonConfig{Levels: "INFO,DEBUG"}
-    logger.SetupLogger(config)
+All your existing logging calls continue to work unchanged.
 
-    logger.Info("Hello World")
-    doSomething()
+#### Phase 2: Gradual Migration to Dependency Injection (Recommended)
+
+Start using explicit logger instances in new code:
+
+```go
+// Create logger instance
+log, err := logger.NewLogger(config)
+if err != nil {
+    panic(err)
 }
 
-func doSomething() {
-    logger.Info("Doing something")
-}
+// Use in new code with dependency injection
+service := NewMyService(log)
 
-// After
+// Existing code still works with compatibility mode
+logger.Info("This still works")
+```
+
+#### Phase 3: Full Migration (Best Practice)
+
+Replace all global logger calls with explicit instances:
+
+```go
+// ❌ Before (global state)
 package main
 
 import "github.com/gtsteffaniak/go-logger/logger"
@@ -377,27 +420,52 @@ func main() {
 
 ## Troubleshooting
 
-### Deprecation Warnings
-If you see deprecation warnings, you're using global functions. Consider migrating to dependency injection:
+### "LOGGER NOT INITIALIZED" Error
+
+If you see this error when calling `logger.Info()`, `logger.Debugf()`, etc.:
+
+```
+[LOGGER NOT INITIALIZED] [INFO] Your message
+Please call logger.EnableCompatibilityMode() or use logger.NewLogger() for instance-based logging.
+```
+
+**Solution:** You must initialize the global logger first:
 
 ```go
-// This shows warnings
-logger.Info("message")
+// Add this at the start of your program
+err := logger.EnableCompatibilityMode(config)
+if err != nil {
+    panic(err)
+}
 
-// This doesn't
-log := logger.NewLogger(config)
+// Now this works
+logger.Info("message")
+```
+
+**Better Solution:** Use dependency injection instead:
+
+```go
+// Create instance (no global state)
+log, err := logger.NewLogger(config)
+if err != nil {
+    panic(err)
+}
+
+// Pass explicitly
 log.Info("message")
 ```
 
-### Compatibility Mode Not Working
-Make sure you're calling `EnableCompatibilityMode()` instead of `SetupLogger()`:
+### Upgrading from v1.x to v2.0
+
+If your code breaks after upgrading, replace the old functions:
 
 ```go
-// Wrong
-err := logger.SetupLogger(config)
+// ❌ REMOVED in v2.0
+logger.SetupLogger(config)
+logger.SetupLoggerWithModern(config)
 
-// Correct
-err := logger.EnableCompatibilityMode(config)
+// ✅ Use this in v2.0
+logger.EnableCompatibilityMode(config)
 ```
 
 ## Examples

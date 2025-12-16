@@ -35,31 +35,45 @@ func main() {
 }
 
 func legacyExample() {
-	println("=== Legacy Usage (Backward Compatible) ===")
+	println("=== Legacy Example (Using Dependency Injection) ===")
 
-	// example stdout logger
+	// Create logger instance with stdout output
 	config := logger.JsonConfig{
 		Levels:    "INFO,DEBUG",
 		ApiLevels: "INFO,ERROR",
 		NoColors:  false,
 	}
-	err := logger.SetupLogger(config)
+
+	log, err := logger.NewLogger(config)
 	if err != nil {
-		logger.Errorf("failed to setup logger: %v", err)
+		fmt.Printf("failed to create logger: %v\n", err)
+		return
 	}
-	config.Output = "./stdout.log"
-	config.Utc = true
-	config.NoColors = true
-	err = logger.SetupLogger(config)
+
+	// Basic logging operations
+	log.Debugf("this is a debug format int value %d in message.", 400)
+	log.Info("this is a basic info message from the logger.")
+	log.API(200, "api call successful")
+	log.API(400, "api call warning")
+	log.API(500, "api call error")
+	// log.Fatal("this is a fatal message, the program will exit 1") // Commented out to prevent exit
+
+	// If you also want to log to a file, create another logger instance
+	fileConfig := logger.JsonConfig{
+		Output:    "./stdout.log",
+		Levels:    "INFO,DEBUG",
+		ApiLevels: "INFO,ERROR",
+		Utc:       true,
+		NoColors:  true,
+	}
+
+	fileLog, err := logger.NewLogger(fileConfig)
 	if err != nil {
-		logger.Errorf("failed to setup file logger: %v", err)
+		fmt.Printf("failed to create file logger: %v\n", err)
+		return
 	}
-	logger.Debugf("this is a debug format int value %d in message.", 400)
-	logger.Info("this is a basic info message from the logger.")
-	logger.Api(200, "api call successful")
-	logger.Api(400, "api call warning")
-	logger.Api(500, "api call error")
-	// logger.Fatal("this is a fatal message, the program will exit 1") // Commented out to prevent exit
+
+	fileLog.Info("This message goes to the file")
 }
 
 func modernExample() {

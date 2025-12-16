@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"log/slog"
 	"os"
 	"slices"
@@ -425,7 +424,7 @@ func (ml *modernLogger) API(statusCode int, msg string, args ...any) {
 
 func (ml *modernLogger) APIf(statusCode int, format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	ml.logAPI(statusCode, msg, true)
+	ml.logAPI(statusCode, msg, false) // API logs don't show level prefix
 }
 
 func (ml *modernLogger) APIContext(ctx context.Context, statusCode int, msg string, args ...any) {
@@ -434,7 +433,7 @@ func (ml *modernLogger) APIContext(ctx context.Context, statusCode int, msg stri
 
 func (ml *modernLogger) APIfContext(ctx context.Context, statusCode int, format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	ml.logAPIWithContext(statusCode, msg, true, ctx)
+	ml.logAPIWithContext(statusCode, msg, false, ctx) // API logs don't show level prefix
 }
 
 // Internal logging methods
@@ -574,9 +573,10 @@ func (ml *modernLogger) writeToConfig(config *LoggerConfig, levelStr, msg string
 		writeOut = writeOut + "\033[0m"
 	}
 
-	err := config.logger.Output(5, writeOut)
+	err := config.logger.Output(8, writeOut) // 8 skips this function and the wrapper functions for correct file:line
 	if err != nil {
-		log.Printf("failed to log message '%v' with error `%v`", msg, err)
+		// Improved error handling - log to stderr instead of stdout
+		fmt.Fprintf(os.Stderr, "failed to log message '%v' with error `%v`\n", msg, err)
 	}
 }
 
