@@ -3,7 +3,6 @@ package logger
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"regexp"
 	"strings"
 	"testing"
@@ -40,22 +39,6 @@ func setupForModernLoggerTest(t *testing.T, buf *bytes.Buffer, levels string, no
 	}
 
 	return logger
-}
-
-// setupForUninitializedTest ensures no global logger is set
-func setupForUninitializedTest(t *testing.T, buf *bytes.Buffer) {
-	t.Helper()
-	savedGlobalLogger := globalLogger
-	currentGlobalLogOutput := log.Writer()
-	savedGlobalLogFlags := log.Flags()
-	t.Cleanup(func() {
-		globalLogger = savedGlobalLogger
-		log.SetOutput(currentGlobalLogOutput)
-		log.SetFlags(savedGlobalLogFlags)
-	})
-	globalLogger = nil
-	log.SetOutput(buf)
-	log.SetFlags(0)
 }
 
 // Regex patterns for prefix stripping (no changes needed)
@@ -122,23 +105,6 @@ func TestInfo_ModernLogger(t *testing.T) {
 			t.Errorf("Expected Sprint log message '%s', got '%s'. Full output: '%s'", expectedMessage, actualMessage, actualOutput)
 		}
 	})
-}
-
-func TestInfo_UninitializedLogger(t *testing.T) {
-	var buf bytes.Buffer
-	setupForUninitializedTest(t, &buf)
-
-	// USE Infof for formatting - should print error message
-	Infof("Message for %s", "uninitialized_user")
-	actualOutput := buf.String()
-
-	// Should contain the "LOGGER NOT INITIALIZED" message
-	if !strings.Contains(actualOutput, "LOGGER NOT INITIALIZED") {
-		t.Errorf("Expected uninitialized logger message, got '%s'", actualOutput)
-	}
-	if !strings.Contains(actualOutput, "Message for uninitialized_user") {
-		t.Errorf("Expected original message in output, got '%s'", actualOutput)
-	}
 }
 
 func TestDebug_ModernLogger(t *testing.T) {

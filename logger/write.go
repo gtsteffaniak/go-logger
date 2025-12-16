@@ -69,7 +69,16 @@ func logMessage(level string, message string, modernLog func(string)) {
 	if globalLogger != nil {
 		modernLog(message)
 	} else {
-		log.Printf("[LOGGER NOT INITIALIZED] [%s] %s\nPlease call logger.EnableCompatibilityMode() or use logger.NewLogger() for instance-based logging.", level, message)
+		log.Printf("[%s] %s\n", level, message)
+	}
+}
+
+// logApiMessage is a helper function for API logging that uses the global logger if available
+func logApiMessage(statusCode int, message string, modernLog func()) {
+	if globalLogger != nil {
+		modernLog()
+	} else {
+		log.Printf("[API] %s\n", message)
 	}
 }
 
@@ -100,18 +109,16 @@ func Fatalf(format string, a ...interface{}) {
 	if globalLogger != nil {
 		globalLogger.Fatalf(format, a...)
 	} else {
-		log.Printf("[LOGGER NOT INITIALIZED] [FATAL] %s\nPlease call logger.EnableCompatibilityMode() or use logger.NewLogger() for instance-based logging.", messageToSend)
+		log.Printf("[FATAL] %s\n", messageToSend)
 		os.Exit(1)
 	}
 }
 
 func Apif(statusCode int, format string, a ...interface{}) {
-	if globalLogger != nil {
+	messageToSend := fmt.Sprintf(format, a...)
+	logApiMessage(statusCode, messageToSend, func() {
 		globalLogger.APIf(statusCode, format, a...)
-	} else {
-		messageToSend := fmt.Sprintf(format, a...)
-		log.Printf("[LOGGER NOT INITIALIZED] [API] %s\nPlease call logger.EnableCompatibilityMode() or use logger.NewLogger() for instance-based logging.", messageToSend)
-	}
+	})
 }
 
 // --- Sprint-style logging functions (space-separated arguments) ---
@@ -145,16 +152,14 @@ func Fatal(a ...interface{}) {
 	if globalLogger != nil {
 		globalLogger.Fatal(messageToSend)
 	} else {
-		log.Printf("[LOGGER NOT INITIALIZED] [FATAL] %s\nPlease call logger.EnableCompatibilityMode() or use logger.NewLogger() for instance-based logging.", messageToSend)
+		log.Printf("[FATAL] %s\n", messageToSend)
 		os.Exit(1)
 	}
 }
 
 func Api(statusCode int, a ...interface{}) {
 	messageToSend := sprintArgs(a...)
-	if globalLogger != nil {
+	logApiMessage(statusCode, messageToSend, func() {
 		globalLogger.API(statusCode, messageToSend)
-	} else {
-		log.Printf("[LOGGER NOT INITIALIZED] [API] %s\nPlease call logger.EnableCompatibilityMode() or use logger.NewLogger() for instance-based logging.", messageToSend)
-	}
+	})
 }
