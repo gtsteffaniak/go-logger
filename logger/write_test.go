@@ -10,48 +10,50 @@ import (
 	// Logger uses time, slices, os
 )
 
-// setupForPrimaryLoggerTest (no changes needed)
-func setupForPrimaryLoggerTest(t *testing.T, buf *bytes.Buffer, activeLevels []LogLevel, noColors bool) {
+// setupForModernLoggerTest sets up a modern logger for testing global functions
+func setupForModernLoggerTest(t *testing.T, buf *bytes.Buffer, levels string, noColors bool) Logger {
 	t.Helper()
-	savedLoggers := append([]*LoggerConfig(nil), loggers...)
-	savedStdOutLoggerExists := stdOutLoggerExists
+	savedGlobalLogger := globalLogger
 	t.Cleanup(func() {
-		loggers = savedLoggers
-		stdOutLoggerExists = savedStdOutLoggerExists
+		globalLogger = savedGlobalLogger
 	})
-	loggers = nil
-	stdOutLoggerExists = false
-	config := LoggerConfig{
-		Stdout:    true,
-		Levels:    activeLevels,
-		ApiLevels: []LogLevel{},
-		Colors:    !noColors,
+
+	config := JsonConfig{
+		Output:   "STDOUT",
+		Levels:   levels,
+		NoColors: noColors,
 	}
-	// Assuming NewLogger is defined in your logger package (e.g. setup.go)
-	// and Logger struct has fields like 'logger', 'apiLevels', 'disabledAPI', etc.
-	l, err := AddLogger(config)
+
+	logger, err := NewLogger(config)
 	if err != nil {
 		t.Fatalf("Failed to create test logger: %v", err)
 	}
-	l.logger.SetOutput(buf)
-	loggers = []*LoggerConfig{l}
+
+	// Set the logger as global for testing package-level functions
+	SetGlobalLogger(logger)
+
+	// Redirect output to buffer (this is a bit hacky but works for testing)
+	// We need to access the underlying logger's output - this will work for non-JSON loggers
+	ml := logger.(*modernLogger)
+	if len(ml.configs) > 0 {
+		ml.configs[0].logger.SetOutput(buf)
+	}
+
+	return logger
 }
 
-// setupForFallbackTest (no changes needed)
-func setupForFallbackTest(t *testing.T, buf *bytes.Buffer) {
+// setupForUninitializedTest ensures no global logger is set
+func setupForUninitializedTest(t *testing.T, buf *bytes.Buffer) {
 	t.Helper()
-	savedLoggers := append([]*LoggerConfig(nil), loggers...)
-	savedStdOutLoggerExists := stdOutLoggerExists
-	currentGlobalLogOutput := log.Writer() // May need adjustment if global log output isn't os.Stderr
+	savedGlobalLogger := globalLogger
+	currentGlobalLogOutput := log.Writer()
 	savedGlobalLogFlags := log.Flags()
 	t.Cleanup(func() {
-		loggers = savedLoggers
-		stdOutLoggerExists = savedStdOutLoggerExists
+		globalLogger = savedGlobalLogger
 		log.SetOutput(currentGlobalLogOutput)
 		log.SetFlags(savedGlobalLogFlags)
 	})
-	loggers = nil
-	stdOutLoggerExists = false
+	globalLogger = nil
 	log.SetOutput(buf)
 	log.SetFlags(0)
 }
@@ -73,23 +75,18 @@ func extractMessage(t *testing.T, output string, pattern *regexp.Regexp) string 
 	return matches[1]
 }
 
-func TestInfo_PrimaryLogger(t *testing.T) {
+func TestInfo_ModernLogger(t *testing.T) {
 	var buf bytes.Buffer
 	noColors := true
 
 	t.Run("InfoNonDebugMode", func(t *testing.T) {
-		setupForPrimaryLoggerTest(t, &buf, []LogLevel{INFO}, noColors)
+		setupForModernLoggerTest(t, &buf, "INFO", noColors)
 		buf.Reset()
 
 		// USE Infof for formatting
 		Infof("Hello %s, number %d", "Alice", 100)
 		expectedMessage := "Hello Alice, number 100\n"
 		actualOutput := buf.String()
-		// The Log function for Infof (and Info) now has prefix=true.
-		// If logger.debugEnabled is false, prefix for INFO is "timestamp [INFO ] "
-		// Your Log function: if prefix || logger.debugEnabled { fmt.Sprintf("%s [%s] ", formattedTime, level) } else { formattedTime + " " }
-		// For Infof, prefix is true. So it will always be "YYYY/MM/DD HH:MM:SS [INFO ] "
-		// Let's define a generic pattern for this or adjust.
 		infoPrefixPattern := regexp.MustCompile(`^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\s\[INFO\s+\]\s(.*\n)$`)
 		actualMessage := extractMessage(t, actualOutput, infoPrefixPattern)
 
@@ -99,7 +96,7 @@ func TestInfo_PrimaryLogger(t *testing.T) {
 	})
 
 	t.Run("InfoWithLoggerDebugMode", func(t *testing.T) {
-		setupForPrimaryLoggerTest(t, &buf, []LogLevel{INFO, DEBUG}, noColors)
+		setupForModernLoggerTest(t, &buf, "INFO,DEBUG", noColors)
 		buf.Reset()
 
 		// USE Infof for formatting
@@ -114,7 +111,7 @@ func TestInfo_PrimaryLogger(t *testing.T) {
 	})
 
 	t.Run("InfoSprint", func(t *testing.T) {
-		setupForPrimaryLoggerTest(t, &buf, []LogLevel{INFO}, noColors)
+		setupForModernLoggerTest(t, &buf, "INFO", noColors)
 		buf.Reset()
 		Info("Hello", "Alice", 100)            // Uses Info (Sprint)
 		expectedMessage := "Hello Alice 100\n" // fmt.Sprint behavior
@@ -127,42 +124,26 @@ func TestInfo_PrimaryLogger(t *testing.T) {
 	})
 }
 
-func TestInfo_FallbackLogger(t *testing.T) {
+func TestInfo_UninitializedLogger(t *testing.T) {
 	var buf bytes.Buffer
-	setupForFallbackTest(t, &buf)
+	setupForUninitializedTest(t, &buf)
 
-	// USE Infof for formatting
-	Infof("Message for %s", "fallback_user")
-	// Fallback for Infof is log.Printf("[%s] %s", level, message) where level is "INFO " (with trailing space)
-	expectedOutput := "[INFO ] Message for fallback_user\n"
+	// USE Infof for formatting - should print error message
+	Infof("Message for %s", "uninitialized_user")
 	actualOutput := buf.String()
 
-	if actualOutput != expectedOutput {
-		t.Errorf("Expected fallback log output '%s', got '%s'", expectedOutput, actualOutput)
+	// Should contain the "LOGGER NOT INITIALIZED" message
+	if !strings.Contains(actualOutput, "LOGGER NOT INITIALIZED") {
+		t.Errorf("Expected uninitialized logger message, got '%s'", actualOutput)
 	}
-
-	buf.Reset()
-	// USE Infof for single string formatted
-	Infof("Simple info fallback")
-	expectedSimple := "[INFO ] Simple info fallback\n"
-	actualSimple := buf.String()
-	if actualSimple != expectedSimple {
-		t.Errorf("Expected simple fallback log output '%s', got '%s'", expectedSimple, actualSimple)
-	}
-
-	buf.Reset()
-	// Test Info (Sprint) fallback
-	Info("Simple", "sprint", "fallback")
-	expectedSprintFallback := "[INFO ] Simple sprint fallback\n"
-	actualSprintFallback := buf.String()
-	if actualSprintFallback != expectedSprintFallback {
-		t.Errorf("Expected Sprint fallback log output '%s', got '%s'", expectedSprintFallback, actualSprintFallback)
+	if !strings.Contains(actualOutput, "Message for uninitialized_user") {
+		t.Errorf("Expected original message in output, got '%s'", actualOutput)
 	}
 }
 
-func TestDebug_PrimaryLogger(t *testing.T) {
+func TestDebug_ModernLogger(t *testing.T) {
 	var buf bytes.Buffer
-	setupForPrimaryLoggerTest(t, &buf, []LogLevel{DEBUG}, true)
+	setupForModernLoggerTest(t, &buf, "DEBUG", true)
 
 	// USE Debugf for formatting
 	Debugf("Processing %s, item %d", "data_set", 77)
@@ -175,22 +156,9 @@ func TestDebug_PrimaryLogger(t *testing.T) {
 	}
 }
 
-func TestDebug_FallbackLogger(t *testing.T) {
+func TestWarning_ModernLogger(t *testing.T) {
 	var buf bytes.Buffer
-	setupForFallbackTest(t, &buf)
-
-	// USE Debugf for formatting
-	Debugf("Fallback debug %s", "message")
-	expectedOutput := "[DEBUG] Fallback debug message\n"
-	actualOutput := buf.String()
-	if actualOutput != expectedOutput {
-		t.Errorf("Expected fallback log output '%s', got '%s'", expectedOutput, actualOutput)
-	}
-}
-
-func TestWarning_PrimaryLogger(t *testing.T) {
-	var buf bytes.Buffer
-	setupForPrimaryLoggerTest(t, &buf, []LogLevel{WARNING, INFO}, true)
+	setupForModernLoggerTest(t, &buf, "WARNING,INFO", true)
 
 	// USE Warningf for formatting
 	Warningf("Potential issue with %s", "config_value")
@@ -204,22 +172,9 @@ func TestWarning_PrimaryLogger(t *testing.T) {
 	}
 }
 
-func TestWarning_FallbackLogger(t *testing.T) {
+func TestError_ModernLogger(t *testing.T) {
 	var buf bytes.Buffer
-	setupForFallbackTest(t, &buf)
-
-	// USE Warningf for formatting
-	Warningf("Fallback warning: %s", "check this")
-	expectedOutput := "[WARN ] Fallback warning: check this\n"
-	actualOutput := buf.String()
-	if actualOutput != expectedOutput {
-		t.Errorf("Expected fallback log output '%s', got '%s'", expectedOutput, actualOutput)
-	}
-}
-
-func TestError_PrimaryLogger(t *testing.T) {
-	var buf bytes.Buffer
-	setupForPrimaryLoggerTest(t, &buf, []LogLevel{ERROR, INFO}, true)
+	setupForModernLoggerTest(t, &buf, "ERROR,INFO", true)
 
 	errVal := fmt.Errorf("critical failure")
 	// USE Errorf for formatting
@@ -234,22 +189,9 @@ func TestError_PrimaryLogger(t *testing.T) {
 	}
 }
 
-func TestError_FallbackLogger(t *testing.T) {
+func TestFormatting_VariousArgTypes_Modern(t *testing.T) {
 	var buf bytes.Buffer
-	setupForFallbackTest(t, &buf)
-
-	// USE Errorf for formatting
-	Errorf("Fallback error: %s", "system down")
-	expectedOutput := "[ERROR] Fallback error: system down\n"
-	actualOutput := buf.String()
-	if actualOutput != expectedOutput {
-		t.Errorf("Expected fallback log output '%s', got '%s'", expectedOutput, actualOutput)
-	}
-}
-
-func TestFormatting_VariousArgTypes_Primary(t *testing.T) {
-	var buf bytes.Buffer
-	setupForPrimaryLoggerTest(t, &buf, []LogLevel{INFO}, true)
+	setupForModernLoggerTest(t, &buf, "INFO", true)
 
 	type MyStruct struct{ Name string }
 	s := MyStruct{Name: "DataObject"}
@@ -275,7 +217,7 @@ func TestFormatting_VariousArgTypes_Primary(t *testing.T) {
 
 func TestLogging_LevelNotActive(t *testing.T) {
 	var buf bytes.Buffer
-	setupForPrimaryLoggerTest(t, &buf, []LogLevel{WARNING}, true) // Only WARNING is active
+	setupForModernLoggerTest(t, &buf, "WARNING", true) // Only WARNING is active
 
 	// Use respective non-f or f functions
 	Infof("This INFO message should not appear")   // or Info() if that's the test
@@ -312,45 +254,30 @@ func TestLogging_LevelNotActive(t *testing.T) {
 	}
 }
 
-// You would also add tests for Api and Apif functions similarly.
-// For example:
-func TestApi_PrimaryLogger(t *testing.T) {
+func TestApi_ModernLogger(t *testing.T) {
 	var buf bytes.Buffer
-	// Assuming API level is distinct and needs to be activated.
-	// And that API logs use their own levels (INFO, WARNING, ERROR based on status code)
-	// The setup should activate levels that Apif will use, e.g., INFO, WARNING, ERROR for the 'apiLevels'
-	// For simplicity, using general levels here. Adjust `setupForPrimaryLoggerTest` or provide
-	// a specific setup if `apiLevels` needs separate handling.
-	// The current setupForPrimaryLoggerTest sets 'levels', not 'apiLevels'.
-	// You might need to adjust NewLogger or setup to set 'apiLevels' appropriately.
-	// For now, let's assume apiLevels in NewLogger gets populated with general levels for testing.
-
-	// This test needs logger.apiLevels to be set appropriately by setupForPrimaryLoggerTest/NewLogger
-	// For example, NewLogger("", []LogLevel{}, []LogLevel{INFO, WARNING, ERROR}, noColors)
-	// The current setupForPrimaryLoggerTest passes empty []LogLevel{} for apiLevels.
-	// This means Apif calls might not log anything unless NewLogger has a default for apiLevels.
-	// Let's assume NewLogger makes apiLevels default to something reasonable if empty, or test will fail.
-	// For now, I'll write the test assuming apiLevels will allow these messages.
-
 	noColors := true
-	// Create a logger instance specifically for API tests if apiLevels are distinct
-	loggers = nil // Clear global loggers
-	stdOutLoggerExists = false
 
-	// Ensure logger/setup.go's NewLogger can handle distinct apiLevels
-	l, err := AddLogger(LoggerConfig{
-		Stdout:    true,
-		Colors:    !noColors,
-		ApiLevels: []LogLevel{INFO, WARNING, ERROR},
-		Levels:    []LogLevel{INFO, WARNING, ERROR},
-		Disabled:  false,
-	}) // Activate relevant levels for API
+	// Set up modern logger with API levels
+	config := JsonConfig{
+		Output:    "STDOUT",
+		Levels:    "INFO,WARNING,ERROR",
+		ApiLevels: "INFO,WARNING,ERROR",
+		NoColors:  noColors,
+	}
+
+	logger, err := NewLogger(config)
 	if err != nil {
 		t.Fatalf("Failed to create test logger for API: %v", err)
 	}
-	l.logger.SetOutput(&buf)
-	loggers = []*LoggerConfig{l}
-	t.Cleanup(func() { loggers = nil })
+	SetGlobalLogger(logger)
+	t.Cleanup(func() { SetGlobalLogger(nil) })
+
+	// Redirect output to buffer
+	ml := logger.(*modernLogger)
+	if len(ml.configs) > 0 {
+		ml.configs[0].logger.SetOutput(&buf)
+	}
 
 	t.Run("ApifInfo", func(t *testing.T) {
 		buf.Reset()
