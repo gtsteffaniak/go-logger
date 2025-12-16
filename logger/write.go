@@ -69,7 +69,16 @@ func logMessage(level string, message string, modernLog func(string)) {
 	if globalLogger != nil {
 		modernLog(message)
 	} else {
-		log.Printf("[%s] %s", level, message)
+		log.Printf("[%s] %s\n", level, message)
+	}
+}
+
+// logApiMessage is a helper function for API logging that uses the global logger if available
+func logApiMessage(statusCode int, message string, modernLog func()) {
+	if globalLogger != nil {
+		modernLog()
+	} else {
+		log.Printf("[API] %s\n", message)
 	}
 }
 
@@ -100,18 +109,16 @@ func Fatalf(format string, a ...interface{}) {
 	if globalLogger != nil {
 		globalLogger.Fatalf(format, a...)
 	} else {
-		log.Println("[FATAL]", messageToSend)
+		log.Printf("[FATAL] %s\n", messageToSend)
 		os.Exit(1)
 	}
 }
 
 func Apif(statusCode int, format string, a ...interface{}) {
-	if globalLogger != nil {
+	messageToSend := fmt.Sprintf(format, a...)
+	logApiMessage(statusCode, messageToSend, func() {
 		globalLogger.APIf(statusCode, format, a...)
-	} else {
-		messageToSend := fmt.Sprintf(format, a...)
-		log.Printf("[API] %s\n", messageToSend)
-	}
+	})
 }
 
 // --- Sprint-style logging functions (space-separated arguments) ---
@@ -152,9 +159,7 @@ func Fatal(a ...interface{}) {
 
 func Api(statusCode int, a ...interface{}) {
 	messageToSend := sprintArgs(a...)
-	if globalLogger != nil {
+	logApiMessage(statusCode, messageToSend, func() {
 		globalLogger.API(statusCode, messageToSend)
-	} else {
-		log.Printf("[API] %s\n", messageToSend)
-	}
+	})
 }
