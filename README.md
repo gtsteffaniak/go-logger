@@ -242,20 +242,20 @@ config := logger.JsonConfig{
 
 **Note:** When `json: true` is set, structured logging is automatically enabled regardless of the `structured` setting.
 
-## Migration Guide (v2.0)
+## Migration Guide from 0.2.x to v1.0.0
 
 ### ⚠️ Breaking Change: Legacy Functions Removed
 
-As of v2.0, the following functions have been **removed**:
+As of v1.0.0, the following functions have been **removed**:
 - `SetupLogger()` - Use `EnableCompatibilityMode()` instead
 - `SetupLoggerWithModern()` - Use `EnableCompatibilityMode()` instead
 
-### Quick Fix for v2.0
+### Quick Fix for v1.0.0
 
 If your code breaks after upgrading, replace the old function:
 
 ```go
-// ❌ REMOVED in v2.0
+// ❌ REMOVED in v1.0.0
 err := logger.SetupLogger(config)
 err := logger.SetupLoggerWithModern(config)
 
@@ -307,11 +307,11 @@ func processData(log logger.Logger) {
 Replace global logger setup:
 
 ```go
-// ❌ OLD (v1.x)
+// ❌ OLD (v0.x)
 logger.SetupLogger(config)
 logger.SetupLoggerWithModern(config)
 
-// ✅ NEW (v2.0)
+// ✅ NEW (v1.0.0)
 logger.EnableCompatibilityMode(config)
 ```
 
@@ -455,16 +455,16 @@ if err != nil {
 log.Info("message")
 ```
 
-### Upgrading from v1.x to v2.0
+### Upgrading from v0.x to v1.x.x
 
 If your code breaks after upgrading, replace the old functions:
 
 ```go
-// ❌ REMOVED in v2.0
+// ❌ REMOVED in v1.0.0
 logger.SetupLogger(config)
 logger.SetupLoggerWithModern(config)
 
-// ✅ Use this in v2.0
+// ✅ Use this in v1.0.0
 logger.EnableCompatibilityMode(config)
 ```
 
