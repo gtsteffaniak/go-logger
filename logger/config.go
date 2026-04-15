@@ -1,6 +1,9 @@
 package logger
 
-import "log"
+import (
+	"log"
+	"regexp"
+)
 
 // friendly config for yaml/json interfaces
 type JsonConfig struct {
@@ -11,6 +14,9 @@ type JsonConfig struct {
 	Json       bool   `json:"json"`       // output in json format (enables structured logging)
 	Structured bool   `json:"structured"` // enable structured logging (default: false)
 	Utc        bool   `json:"utc"`        // use UTC time in the output instead of local time
+	// ApiPathExclude is a regex matched against the request path (and query if provided via ApiPath).
+	// When it matches, API access lines are not written to this logger output. Empty means no exclusion.
+	ApiPathExclude string `json:"apiPathExclude"`
 }
 
 // go logger log config
@@ -26,6 +32,10 @@ type LoggerConfig struct {
 	FilePath     string
 	Structured   bool
 	Json         bool
+
+	// ApiPathExcludeRegex is compiled from JsonConfig.ApiPathExclude; when non-nil, API logs with a
+	// request path that matches are skipped for this sink only (see ApiPath / APIPath).
+	ApiPathExcludeRegex *regexp.Regexp
 
 	// not exposed
 	logger *log.Logger

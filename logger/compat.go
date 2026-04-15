@@ -177,6 +177,7 @@ func (n *noOpLogger) FatalfContext(ctx context.Context, format string, args ...a
 func (n *noOpLogger) With(args ...any) Logger                                                     { return n }
 func (n *noOpLogger) WithGroup(name string) Logger                                                { return n }
 func (n *noOpLogger) API(statusCode int, msg string, args ...any)                                 {}
+func (n *noOpLogger) APIPath(statusCode int, requestPath string, msg string, args ...any)        {}
 func (n *noOpLogger) APIf(statusCode int, format string, args ...any)                             {}
 func (n *noOpLogger) APIContext(ctx context.Context, statusCode int, msg string, args ...any)     {}
 func (n *noOpLogger) APIfContext(ctx context.Context, statusCode int, format string, args ...any) {}

@@ -40,6 +40,7 @@ type Logger interface {
 
 	// API logging
 	API(statusCode int, msg string, args ...any)
+	APIPath(statusCode int, requestPath string, msg string, args ...any)
 	APIf(statusCode int, format string, args ...any)
 	APIContext(ctx context.Context, statusCode int, msg string, args ...any)
 	APIfContext(ctx context.Context, statusCode int, format string, args ...any)
