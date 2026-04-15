@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -60,6 +61,9 @@ func NewLogger(config JsonConfig) (Logger, error) {
 	} else {
 		// Use custom handler for text output to maintain original format
 		slogHandler = NewCustomHandler(output, slogLevel, loggerConfig)
+	}
+	if loggerConfig.ApiPathExcludeRegex != nil {
+		slogHandler = &apiPathFilterHandler{inner: slogHandler, exclude: loggerConfig.ApiPathExcludeRegex}
 	}
 
 	// Create the logger instance with proper initialization
@@ -119,6 +123,9 @@ func (ml *modernLogger) addConfig(config JsonConfig) error {
 		})
 	} else {
 		slogHandler = NewCustomHandler(output, slogLevel, loggerConfig)
+	}
+	if loggerConfig.ApiPathExcludeRegex != nil {
+		slogHandler = &apiPathFilterHandler{inner: slogHandler, exclude: loggerConfig.ApiPathExcludeRegex}
 	}
 
 	// Create the logger instance
@@ -189,6 +196,41 @@ func (m *multiHandler) WithGroup(name string) slog.Handler {
 		newHandlers[i] = h.WithGroup(name)
 	}
 	return newMultiHandler(newHandlers)
+}
+
+// apiPathFilterHandler skips slog records when attribute request_path matches exclude (per-sink API access filtering).
+type apiPathFilterHandler struct {
+	inner   slog.Handler
+	exclude *regexp.Regexp
+}
+
+func (h *apiPathFilterHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.inner.Enabled(ctx, level)
+}
+
+func (h *apiPathFilterHandler) Handle(ctx context.Context, r slog.Record) error {
+	if h.exclude != nil {
+		var path string
+		r.Attrs(func(a slog.Attr) bool {
+			if a.Key == "request_path" {
+				path = a.Value.String()
+				return false
+			}
+			return true
+		})
+		if path != "" && h.exclude.MatchString(path) {
+			return nil
+		}
+	}
+	return h.inner.Handle(ctx, r)
+}
+
+func (h *apiPathFilterHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &apiPathFilterHandler{inner: h.inner.WithAttrs(attrs), exclude: h.exclude}
+}
+
+func (h *apiPathFilterHandler) WithGroup(name string) slog.Handler {
+	return &apiPathFilterHandler{inner: h.inner.WithGroup(name), exclude: h.exclude}
 }
 
 // convertLogLevelsToSlogLevel converts the logger levels to slog level
@@ -283,113 +325,123 @@ func convertJsonConfigToLoggerConfig(config JsonConfig) (*LoggerConfig, error) {
 	// JSON always enables structured logging, otherwise use the structured config (default: false)
 	structuredOutput := config.Json || config.Structured
 
+	var apiPathExc *regexp.Regexp
+	if config.ApiPathExclude != "" {
+		re, err := regexp.Compile(config.ApiPathExclude)
+		if err != nil {
+			return nil, fmt.Errorf("invalid apiPathExclude regex: %w", err)
+		}
+		apiPathExc = re
+	}
+
 	return &LoggerConfig{
-		Levels:       upperLevels,
-		ApiLevels:    upperApiLevels,
-		Stdout:       config.Output == "",
-		Colors:       !config.NoColors,
-		Disabled:     slices.Contains(upperLevels, DISABLED),
-		DebugEnabled: slices.Contains(upperLevels, DEBUG),
-		DisabledAPI:  slices.Contains(upperApiLevels, DISABLED),
-		Utc:          config.Utc,
-		FilePath:     config.Output,
-		Structured:   structuredOutput,
-		Json:         config.Json,
+		Levels:              upperLevels,
+		ApiLevels:           upperApiLevels,
+		Stdout:              config.Output == "",
+		Colors:              !config.NoColors,
+		Disabled:            slices.Contains(upperLevels, DISABLED),
+		DebugEnabled:        slices.Contains(upperLevels, DEBUG),
+		DisabledAPI:         slices.Contains(upperApiLevels, DISABLED),
+		Utc:                 config.Utc,
+		FilePath:            config.Output,
+		Structured:          structuredOutput,
+		Json:                config.Json,
+		ApiPathExcludeRegex: apiPathExc,
 	}, nil
 }
 
 // Basic logging methods
 func (ml *modernLogger) Debug(msg string, args ...any) {
-	ml.logWithLevel(DEBUG, msg, false, false, args...)
+	ml.logWithLevel(DEBUG, msg, false, false, "", args...)
 }
 
 func (ml *modernLogger) Info(msg string, args ...any) {
-	ml.logWithLevel(INFO, msg, false, false, args...)
+	ml.logWithLevel(INFO, msg, false, false, "", args...)
 }
 
 func (ml *modernLogger) Warn(msg string, args ...any) {
-	ml.logWithLevel(WARNING, msg, false, false, args...)
+	ml.logWithLevel(WARNING, msg, false, false, "", args...)
 }
 
 func (ml *modernLogger) Error(msg string, args ...any) {
-	ml.logWithLevel(ERROR, msg, false, false, args...)
+	ml.logWithLevel(ERROR, msg, false, false, "", args...)
 }
 
 func (ml *modernLogger) Fatal(msg string, args ...any) {
-	ml.logWithLevel(FATAL, msg, false, false, args...)
+	ml.logWithLevel(FATAL, msg, false, false, "", args...)
 }
 
 // Formatted logging methods
 func (ml *modernLogger) Debugf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	ml.logWithLevel(DEBUG, msg, true, false)
+	ml.logWithLevel(DEBUG, msg, true, false, "")
 }
 
 func (ml *modernLogger) Infof(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	ml.logWithLevel(INFO, msg, true, false)
+	ml.logWithLevel(INFO, msg, true, false, "")
 }
 
 func (ml *modernLogger) Warnf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	ml.logWithLevel(WARNING, msg, true, false)
+	ml.logWithLevel(WARNING, msg, true, false, "")
 }
 
 func (ml *modernLogger) Errorf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	ml.logWithLevel(ERROR, msg, true, false)
+	ml.logWithLevel(ERROR, msg, true, false, "")
 }
 
 func (ml *modernLogger) Fatalf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	ml.logWithLevel(FATAL, msg, true, false)
+	ml.logWithLevel(FATAL, msg, true, false, "")
 }
 
 // Context-aware methods
 func (ml *modernLogger) DebugContext(ctx context.Context, msg string, args ...any) {
-	ml.logWithLevelAndContext(DEBUG, msg, false, false, ctx, args...)
+	ml.logWithLevelAndContext(DEBUG, msg, false, false, ctx, "", args...)
 }
 
 func (ml *modernLogger) InfoContext(ctx context.Context, msg string, args ...any) {
-	ml.logWithLevelAndContext(INFO, msg, false, false, ctx, args...)
+	ml.logWithLevelAndContext(INFO, msg, false, false, ctx, "", args...)
 }
 
 func (ml *modernLogger) WarnContext(ctx context.Context, msg string, args ...any) {
-	ml.logWithLevelAndContext(WARNING, msg, false, false, ctx, args...)
+	ml.logWithLevelAndContext(WARNING, msg, false, false, ctx, "", args...)
 }
 
 func (ml *modernLogger) ErrorContext(ctx context.Context, msg string, args ...any) {
-	ml.logWithLevelAndContext(ERROR, msg, false, false, ctx, args...)
+	ml.logWithLevelAndContext(ERROR, msg, false, false, ctx, "", args...)
 }
 
 func (ml *modernLogger) FatalContext(ctx context.Context, msg string, args ...any) {
-	ml.logWithLevelAndContext(FATAL, msg, false, false, ctx, args...)
+	ml.logWithLevelAndContext(FATAL, msg, false, false, ctx, "", args...)
 }
 
 // Formatted context-aware methods
 func (ml *modernLogger) DebugfContext(ctx context.Context, format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	ml.logWithLevelAndContext(DEBUG, msg, true, false, ctx)
+	ml.logWithLevelAndContext(DEBUG, msg, true, false, ctx, "")
 }
 
 func (ml *modernLogger) InfofContext(ctx context.Context, format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	ml.logWithLevelAndContext(INFO, msg, true, false, ctx)
+	ml.logWithLevelAndContext(INFO, msg, true, false, ctx, "")
 }
 
 func (ml *modernLogger) WarnfContext(ctx context.Context, format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	ml.logWithLevelAndContext(WARNING, msg, true, false, ctx)
+	ml.logWithLevelAndContext(WARNING, msg, true, false, ctx, "")
 }
 
 func (ml *modernLogger) ErrorfContext(ctx context.Context, format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	ml.logWithLevelAndContext(ERROR, msg, true, false, ctx)
+	ml.logWithLevelAndContext(ERROR, msg, true, false, ctx, "")
 }
 
 func (ml *modernLogger) FatalfContext(ctx context.Context, format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	ml.logWithLevelAndContext(FATAL, msg, true, false, ctx)
+	ml.logWithLevelAndContext(FATAL, msg, true, false, ctx, "")
 }
 
 // Structured logging
@@ -422,6 +474,11 @@ func (ml *modernLogger) API(statusCode int, msg string, args ...any) {
 	ml.logAPI(statusCode, msg, false, args...)
 }
 
+// APIPath is like API but supplies requestPath (path plus raw query) for per-sink ApiPathExclude filtering.
+func (ml *modernLogger) APIPath(statusCode int, requestPath string, msg string, args ...any) {
+	ml.logAPIWithPath(statusCode, requestPath, msg, false, args...)
+}
+
 func (ml *modernLogger) APIf(statusCode int, format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	ml.logAPI(statusCode, msg, false) // API logs don't show level prefix
@@ -437,29 +494,18 @@ func (ml *modernLogger) APIfContext(ctx context.Context, statusCode int, format 
 }
 
 // Internal logging methods
-func (ml *modernLogger) logWithLevel(level LogLevel, msg string, formatted bool, api bool, args ...any) {
-	ml.mu.RLock()
-	defer ml.mu.RUnlock()
 
-	// Use structured logging if enabled and args are provided
-	if len(ml.configs) > 0 && len(args) > 0 && ml.configs[0].Structured {
-		ml.slogStructuredLog(level, msg, args...)
-		return
-	}
-
-	// Use slog for all logging if structured output is enabled (even without args)
-	if len(ml.configs) > 0 && ml.configs[0].Structured {
-		ml.slogStructuredLog(level, msg, args...)
-		return
-	}
-
-	// Fall back to original logging for backward compatibility
+// classicLogUnlocked writes to per-config outputs. Caller must hold ml.mu RLock.
+func (ml *modernLogger) classicLogUnlocked(level LogLevel, msg string, formatted bool, api bool, apiPath string) {
 	levelStr := levelToString(level)
 	color := getColorForLevel(level)
 
 	for _, config := range ml.configs {
 		if api {
 			if config.DisabledAPI || !slices.Contains(config.ApiLevels, level) {
+				continue
+			}
+			if apiPath != "" && config.ApiPathExcludeRegex != nil && config.ApiPathExcludeRegex.MatchString(apiPath) {
 				continue
 			}
 		} else if level != FATAL {
@@ -470,34 +516,81 @@ func (ml *modernLogger) logWithLevel(level LogLevel, msg string, formatted bool,
 
 		ml.writeToConfig(config, levelStr, msg, formatted, api, color)
 	}
+}
+
+func (ml *modernLogger) logWithLevel(level LogLevel, msg string, formatted bool, api bool, apiPath string, args ...any) {
+	ml.mu.RLock()
+	defer ml.mu.RUnlock()
+
+	if len(ml.configs) == 0 {
+		return
+	}
+
+	// Structured logging (request_path is added for per-handler API path filtering)
+	if ml.configs[0].Structured {
+		var attrs []any
+		if apiPath != "" {
+			attrs = append(attrs, "request_path", apiPath)
+		}
+		attrs = append(attrs, args...)
+		if len(attrs) > 0 {
+			ml.slogStructuredLog(level, msg, attrs...)
+		} else {
+			ml.slogStructuredLog(level, msg)
+		}
+		return
+	}
+
+	ml.classicLogUnlocked(level, msg, formatted, api, apiPath)
 
 	if level == FATAL {
 		os.Exit(1)
 	}
 }
 
-func (ml *modernLogger) logWithLevelAndContext(level LogLevel, msg string, formatted bool, api bool, ctx context.Context, args ...any) {
+func (ml *modernLogger) logWithLevelAndContext(level LogLevel, msg string, formatted bool, api bool, ctx context.Context, apiPath string, args ...any) {
 	ml.mu.RLock()
 	defer ml.mu.RUnlock()
 
-	// Use structured logging with context if enabled
-	if ml.configs[0].Structured {
-		ml.slogStructuredLogWithContext(ctx, level, msg, args...)
+	if len(ml.configs) == 0 {
 		return
 	}
 
-	// Fall back to context-less logging for backward compatibility
-	ml.logWithLevel(level, msg, formatted, api)
+	// Use structured logging with context if enabled
+	if ml.configs[0].Structured {
+		var attrs []any
+		if apiPath != "" {
+			attrs = append(attrs, "request_path", apiPath)
+		}
+		attrs = append(attrs, args...)
+		if len(attrs) > 0 {
+			ml.slogStructuredLogWithContext(ctx, level, msg, attrs...)
+		} else {
+			ml.slogStructuredLogWithContext(ctx, level, msg)
+		}
+		return
+	}
+
+	ml.classicLogUnlocked(level, msg, formatted, api, apiPath)
+
+	if level == FATAL {
+		os.Exit(1)
+	}
 }
 
 func (ml *modernLogger) logAPI(statusCode int, msg string, formatted bool, args ...any) {
 	level, _ := getAPILevelAndColor(statusCode)
-	ml.logWithLevel(level, msg, formatted, true, args...)
+	ml.logWithLevel(level, msg, formatted, true, "", args...)
+}
+
+func (ml *modernLogger) logAPIWithPath(statusCode int, requestPath string, msg string, formatted bool, args ...any) {
+	level, _ := getAPILevelAndColor(statusCode)
+	ml.logWithLevel(level, msg, formatted, true, requestPath, args...)
 }
 
 func (ml *modernLogger) logAPIWithContext(statusCode int, msg string, formatted bool, ctx context.Context, args ...any) {
 	level, _ := getAPILevelAndColor(statusCode)
-	ml.logWithLevelAndContext(level, msg, formatted, true, ctx, args...)
+	ml.logWithLevelAndContext(level, msg, formatted, true, ctx, "", args...)
 }
 
 func (ml *modernLogger) slogStructuredLog(level LogLevel, msg string, args ...any) {

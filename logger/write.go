@@ -163,3 +163,11 @@ func Api(statusCode int, a ...interface{}) {
 		globalLogger.API(statusCode, messageToSend)
 	})
 }
+
+// ApiPath is like Api but passes requestPath (path plus raw query) for per-sink ApiPathExclude filtering.
+func ApiPath(statusCode int, requestPath string, a ...interface{}) {
+	messageToSend := sprintArgs(a...)
+	logApiMessage(statusCode, messageToSend, func() {
+		globalLogger.APIPath(statusCode, requestPath, messageToSend)
+	})
+}
